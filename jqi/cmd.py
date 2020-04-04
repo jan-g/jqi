@@ -101,8 +101,9 @@ def main():
         try:
             proc = sh.jq(*args, _in=text, _out=out, _err=err)
             proc.wait()
-            out = out.getvalue()
-            w2.content.text = ANSI(out)
+            out = out.getvalue().splitlines()
+            maxlen = max(app.output.get_size().rows * 2, 100)
+            w2.content.text = ANSI("\n".join(out[:maxlen]))
             w3.content.text = None
             w3.height = 0
             app.invalidate()
