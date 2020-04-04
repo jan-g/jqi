@@ -4,6 +4,7 @@ from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.input.defaults import create_input
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout.containers import HSplit, Window
@@ -85,7 +86,7 @@ def main():
     ])
 
     layout = Layout(root_container)
-    app = Application(layout=layout, full_screen=True, key_bindings=kb)
+    app = Application(layout=layout, full_screen=True, key_bindings=kb, input=create_input(always_prefer_tty=True))
 
     def reformat():
         nonlocal w2
