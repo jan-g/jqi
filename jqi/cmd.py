@@ -125,7 +125,7 @@ def main():
         args += ["-r"]
     args += [buf.text]
     content = sh.jq(*args, _in=text, _tty_out=sys.stdout.isatty()).stdout.decode()
-    print(content)
+    print(content, end="")
 
 
 if __name__ == '__main__':

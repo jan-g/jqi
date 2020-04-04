@@ -9,7 +9,7 @@ def read_file(fn):
 
 setup(
     name="jqi",
-    version="0.0.2",
+    version="0.0.3",
     description="An interactive wrapper around jq",
     long_description=read_file("README.md"),
     long_description_content_type="text/markdown",
