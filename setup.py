@@ -9,28 +9,8 @@ def read_file(fn):
 
 setup(
     name="jqi",
-    version="0.0.4",
-    description="An interactive wrapper around jq",
-    long_description=read_file("README.md"),
-    long_description_content_type="text/markdown",
-    author="jang",
-    author_email="jqi@ioctl.org",
+    versioning="dev",
+    setup_requires=["setupmeta"],
     url="https://github.com/jan-g/jqi",
-    license="Apache License 2.0",
     packages=find_packages(exclude=["test.*, *.test", "test*"]),
-
-    entry_points={
-        'console_scripts': [
-            'jqi = jqi.cmd:main',
-        ],
-    },
-
-    install_requires=[
-        "sh",
-        "prompt_toolkit",
-    ],
-
-    tests_require=[
-        "pytest",
-    ],
 )
