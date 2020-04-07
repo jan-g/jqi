@@ -48,7 +48,7 @@ class Editor:
         self.input = "{}"
 
         kb = self.kb = KeyBindings()
-        kb.add('c-x')(self.exit)
+        kb.add(Keys.ControlX, eager=True)(self.exit)
         kb.add('c-c')(self.quit)
         kb.add(Keys.ControlSpace)(self.toggle_compact)
         kb.add(Keys.ControlR)(self.toggle_raw)
