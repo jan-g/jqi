@@ -1,4 +1,6 @@
 import asyncio
+import argparse_helper as argparse
+import config_dir
 import io
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
@@ -14,46 +16,84 @@ import sh
 import sys
 
 
-def main():
-    text = ''
-    if len(sys.argv) == 1:
+def main(*args):
+    if len(args) > 0:
+        args = [args]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f", dest="cfg_file")
+    parser.add_argument("file", nargs="?")
+    args = parser.parse_args(*args)
+
+    editor = Editor(file=args.cfg_file)
+
+    if args.file is None:
         text = sys.stdin.read()
-    elif len(sys.argv) == 2:
-        with open(sys.argv[1]) as f:
+    else:
+        with open(args.file) as f:
             text = f.read()
 
-    buf = Buffer()  # Editable buffer.
-    buf.document = Document(text=".")
-    compact = False
-    raw = False
+    editor.run(text)
+    editor.save()
 
-    kb = KeyBindings()
+class Editor:
+    def __init__(self, file=None):
+        self.file = file
+        self.pattern = "."
+        self.compact = False
+        self.raw = False
+        self.input = "{}"
 
-    @kb.add('c-c')
-    def _(event):
+        kb = self.kb = KeyBindings()
+        kb.add('c-x')(self.exit)
+        kb.add('c-c')(self.quit)
+        kb.add(Keys.ControlSpace)(self.toggle_compact)
+        kb.add(Keys.ControlR)(self.toggle_raw)
+
+        self.app = None
+        self.buf = None
+        self.status = None
+        self.result = None
+        self.error = None
+        self.load()
+
+    def load(self):
+        cfg = dict(pattern=".")
+        if self.file is not None:
+            cfg = config_dir.load_config(".jqi", sub_name=self.file, default=cfg, create=False)
+        self.pattern = cfg.get("pattern", self.pattern)
+        self.compact = cfg.get("compact", False)
+        self.raw = cfg.get("raw", False)
+
+    def save(self):
+        cfg = {
+            "pattern": self.buf.text,
+            "compact": self.compact,
+            "raw": self.raw,
+        }
+        if self.file is not None:
+            config_dir.save_config(".jqi", sub_name=self.file, config=cfg)
+
+    def exit(self, event):
         event.app.exit()
 
-    @kb.add(Keys.ControlSpace)
-    def _(event):
-        nonlocal compact
-        compact = not compact
-        reformat()
+    def quit(self, event):
+        sys.exit(1)
 
-    @kb.add(Keys.ControlR)
-    def _(event):
-        nonlocal raw
-        raw = not raw
-        reformat()
+    def toggle_compact(self, event):
+        self.compact = not self.compact
+        self.reformat()
 
-    old_text = buf.text
+    def toggle_raw(self, event):
+        self.raw = not self.raw
+        self.reformat()
 
-    async def tick():
-        nonlocal old_text
+    async def tick(self):
         unchanged_count = 0
         counting = False
+        old_pattern = self.buf.text
         while True:
-            if buf.text != old_text:
-                old_text = buf.text
+            if self.buf.text != old_pattern:
+                old_pattern = self.buf.text
                 unchanged_count = 0
                 counting = True
             if counting:
@@ -62,72 +102,81 @@ def main():
                 counting = False
                 unchanged_count = 0
                 try:
-                    reformat()
+                    self.reformat()
                 except Exception as e:
                     print("error:", e)
             await asyncio.sleep(0.3)
 
-    task = asyncio.get_event_loop().create_task(tick())
-
-    root_container = HSplit([
-        # One window that holds the BufferControl with the default buffer at
-        # the top.
-        w1 := Window(height=3, content=BufferControl(buffer=buf)),
-
-        # A vertical line in the middle. We explicitly specify the height, to
-        # make sure that the layout engine will not try to divide the whole
-        # width by three for all these windows. The window will simply fill its
-        # content by repeating this character.
-        Window(height=1, char='-'),
-
-        # Display the text 'Hello world' on the bottom.
-        w2 := Window(content=FormattedTextControl(text='Hello world')),
-        w3 := Window(content=FormattedTextControl())
-    ])
-
-    layout = Layout(root_container)
-    app = Application(layout=layout, full_screen=True, key_bindings=kb, input=create_input(always_prefer_tty=True))
-
-    def reformat():
-        nonlocal w2
+    def reformat(self):
         args = []
-        if compact:
+        if self.compact:
             args += ["-c"]
-        if raw:
+        if self.raw:
             args += ["-r"]
-        args += [buf.text]
+
+        self.status.text = "[" + " ".join(args) + "]"
+
+        args += [self.buf.text]
         out = io.StringIO()
         err = io.StringIO()
         try:
-            proc = sh.jq(*args, _in=text, _out=out, _err=err)
+            proc = sh.jq(*args, _in=self.input, _out=out, _err=err)
             proc.wait()
             out = out.getvalue().splitlines()
-            maxlen = max(app.output.get_size().rows * 2, 100)
-            w2.content.text = ANSI("\n".join(out[:maxlen]))
-            w3.content.text = None
-            w3.height = 0
-            app.invalidate()
+            maxlen = max(self.app.output.get_size().rows * 2, 100)
+            self.result.content.text = ANSI("\n".join(out[:maxlen]))
+            self.error.content.text = None
+            self.error.height = 0
+            self.app.invalidate()
         except sh.ErrorReturnCode:
             err = err.getvalue()
-            w3.content.text = err
-            w3.height = err.count("\n")
-            app.invalidate()
+            self.error.content.text = err
+            self.error.height = err.count("\n")
 
-    reformat()
+        self.app.invalidate()
 
-    # Run the application, and wait for it to finish.
-    app.run()
-    task.cancel()
+    def run(self, text):
+        self.input = text
+        self.buf = Buffer(document=Document(text=self.pattern))  # Editable buffer.
+        self.status = FormattedTextControl(text="")  # Status line
 
-    args = []
-    if compact:
-        args += ["-c"]
-    if raw:
-        args += ["-r"]
-    args += [buf.text]
-    content = sh.jq(*args, _in=text, _tty_out=sys.stdout.isatty()).stdout.decode()
-    print(content, end="")
+        root_container = HSplit([
+            Window(height=3, content=BufferControl(buffer=self.buf)),
+
+            # A vertical line in the middle. We explicitly specify the height, to
+            # make sure that the layout engine will not try to divide the whole
+            # width by three for all these windows. The window will simply fill its
+            # content by repeating this character.
+            Window(height=1, char='-', content=self.status),
+
+            # Display the text 'Hello world' on the bottom.
+            w2 := Window(content=FormattedTextControl(text='Hello world')),
+            w3 := Window(content=FormattedTextControl())
+        ])
+
+        self.result = w2
+        self.error = w3
+
+        layout = Layout(root_container)
+        self.app = Application(layout=layout, full_screen=True, key_bindings=self.kb,
+                               input=create_input(always_prefer_tty=True))
+        task = asyncio.get_event_loop().create_task(self.tick())
+
+        self.reformat()
+
+        # Run the application, and wait for it to finish.
+        self.app.run()
+        task.cancel()
+
+        args = []
+        if self.compact:
+            args += ["-c"]
+        if self.raw:
+            args += ["-r"]
+        args += [self.buf.text]
+        content = sh.jq(*args, _in=text, _tty_out=sys.stdout.isatty()).stdout.decode()
+        print(content, end="")
 
 
 if __name__ == '__main__':
-    main()
+    main("-f", "foo", "/tmp/x")

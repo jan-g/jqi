@@ -1,2 +1,4 @@
+argparse_helper >= 0.9.1
+config-dir >= 0.0.5
 prompt_toolkit >= 3.0.5
 sh
