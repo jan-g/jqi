@@ -32,8 +32,12 @@ def main(*args):
         with open(args.file) as f:
             text = f.read()
 
-    editor.run(text)
-    editor.save()
+    result = editor.run(text)
+    if result == 0:
+        editor.save()
+    else:
+        sys.exit(result)
+
 
 class Editor:
     def __init__(self, file=None):
@@ -74,10 +78,10 @@ class Editor:
             config_dir.save_config(".jqi", sub_name=self.file, config=cfg)
 
     def exit(self, event):
-        event.app.exit()
+        event.app.exit(0)
 
     def quit(self, event):
-        sys.exit(1)
+        event.app.exit(1)
 
     def toggle_compact(self, event):
         self.compact = not self.compact
@@ -165,8 +169,11 @@ class Editor:
         self.reformat()
 
         # Run the application, and wait for it to finish.
-        self.app.run()
+        result = self.app.run()
         task.cancel()
+
+        if result != 0:
+            return result
 
         args = []
         if self.compact:
@@ -176,6 +183,7 @@ class Editor:
         args += [self.buf.text]
         content = sh.jq(*args, _in=text, _tty_out=sys.stdout.isatty()).stdout.decode()
         print(content, end="")
+        return 0
 
 
 if __name__ == '__main__':
