@@ -26,10 +26,15 @@ def main(*args):
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", dest="cfg_file")
     parser.add_argument("-x", default=False, action="store_true", dest="run")
+    parser.add_argument("-l", default=False, action="count", dest="list")
     parser.add_argument("file", nargs="?")
     args = parser.parse_args(*args)
 
     editor = Editor(file=args.cfg_file)
+
+    if args.list > 0:
+        list_stored(args.list > 1)
+        return
 
     if args.file is None:
         text = sys.stdin.read()
@@ -45,6 +50,19 @@ def main(*args):
             editor.save()
         else:
             sys.exit(result)
+
+
+def list_stored(long=False):
+    d = config_dir.config_dir(name=".jqi", sub_dir="query")
+    for f in d.iterdir():
+        name = f.name
+        cfg = config_dir.load_config(name=".jqi", sub_dir="query", sub_name=name, create=False)
+        if long:
+            print(name)
+            for line in cfg["pattern"].splitlines():
+                print("\t{}".format(line))
+        else:
+            print("{}\t{}".format(name, cfg["pattern"].splitlines()[0]))
 
 
 class Editor:
