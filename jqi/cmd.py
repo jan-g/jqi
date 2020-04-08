@@ -14,6 +14,7 @@ from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.layout import Layout
 import sh
 import sys
+import types
 
 
 def main(*args):
@@ -21,6 +22,7 @@ def main(*args):
         args = [args]
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", dest="cfg_file")
+    parser.add_argument("-x", default=False, action="store_true", dest="run")
     parser.add_argument("file", nargs="?")
     args = parser.parse_args(*args)
 
@@ -32,11 +34,14 @@ def main(*args):
         with open(args.file) as f:
             text = f.read()
 
-    result = editor.run(text)
-    if result == 0:
-        editor.save()
+    if args.run:
+        editor.jq(text, stdio=True)
     else:
-        sys.exit(result)
+        result = editor.run(text)
+        if result == 0:
+            editor.save()
+        else:
+            sys.exit(result)
 
 
 class Editor:
@@ -47,11 +52,7 @@ class Editor:
         self.raw = False
         self.input = "{}"
 
-        kb = self.kb = KeyBindings()
-        kb.add(Keys.ControlX, eager=True)(self.exit)
-        kb.add('c-c')(self.quit)
-        kb.add(Keys.ControlSpace)(self.toggle_compact)
-        kb.add(Keys.ControlR)(self.toggle_raw)
+        self.kb = self.construct_key_bindings()
 
         self.app = None
         self.buf = None
@@ -59,11 +60,31 @@ class Editor:
         self.result = None
         self.error = None
         self.load()
+        self.layout()
+
+    def construct_key_bindings(self):
+        bindings = [
+            {"keys": ["c-x"], "args": dict(eager=True), "func": "exit"},
+            {"keys": ["c-c"], "args": {}, "func": "quit"},
+            {"keys": ["c-@"], "args": {}, "func": "toggle_compact"},
+            {"keys": ["c-r"], "args": {}, "func": "toggle_raw"},
+        ]
+        cfg = {
+            "bindings": bindings,
+        }
+        cfg = types.SimpleNamespace(**config_dir.load_config(".jqi", default=cfg))
+
+        kb = KeyBindings()
+        for binding in cfg.bindings:
+            binding = types.SimpleNamespace(**binding)
+            kb.add(*binding.keys, **binding.args)(getattr(self, binding.func))
+
+        return kb
 
     def load(self):
         cfg = dict(pattern=".")
         if self.file is not None:
-            cfg = config_dir.load_config(".jqi", sub_name=self.file, default=cfg, create=False)
+            cfg = config_dir.load_config(".jqi", sub_dir="query", sub_name=self.file, default=cfg, create=False)
         self.pattern = cfg.get("pattern", self.pattern)
         self.compact = cfg.get("compact", False)
         self.raw = cfg.get("raw", False)
@@ -75,7 +96,7 @@ class Editor:
             "raw": self.raw,
         }
         if self.file is not None:
-            config_dir.save_config(".jqi", sub_name=self.file, config=cfg)
+            config_dir.save_config(".jqi", sub_dir="query", sub_name=self.file, config=cfg)
 
     def exit(self, event):
         event.app.exit(0)
@@ -120,27 +141,21 @@ class Editor:
 
         self.status.text = "[" + " ".join(args) + "]"
 
-        args += [self.buf.text]
-        out = io.StringIO()
-        err = io.StringIO()
-        try:
-            proc = sh.jq(*args, _in=self.input, _out=out, _err=err)
-            proc.wait()
-            out = out.getvalue().splitlines()
+        out, err = self.jq(tty=True)
+        if out is not None:
+            out = out.splitlines()
             maxlen = max(self.app.output.get_size().rows * 2, 100)
             self.result.content.text = ANSI("\n".join(out[:maxlen]))
             self.error.content.text = None
             self.error.height = 0
             self.app.invalidate()
-        except sh.ErrorReturnCode:
-            err = err.getvalue()
+        else:
             self.error.content.text = err
             self.error.height = err.count("\n")
 
         self.app.invalidate()
 
-    def run(self, text):
-        self.input = text
+    def layout(self):
         self.buf = Buffer(document=Document(text=self.pattern))  # Editable buffer.
         self.status = FormattedTextControl(text="")  # Status line
 
@@ -164,8 +179,10 @@ class Editor:
         layout = Layout(root_container)
         self.app = Application(layout=layout, full_screen=True, key_bindings=self.kb,
                                input=create_input(always_prefer_tty=True))
-        task = asyncio.get_event_loop().create_task(self.tick())
 
+    def run(self, text):
+        self.input = text
+        task = asyncio.get_event_loop().create_task(self.tick())
         self.reformat()
 
         # Run the application, and wait for it to finish.
@@ -175,15 +192,42 @@ class Editor:
         if result != 0:
             return result
 
+        out, _ = self.jq(tty=sys.stdout.isatty())
+        print(out, end="")
+        return 0
+
+    def jq(self, text=None, stdio=False, tty=False):
+        if text is not None:
+            self.input = text
         args = []
         if self.compact:
             args += ["-c"]
         if self.raw:
             args += ["-r"]
+
         args += [self.buf.text]
-        content = sh.jq(*args, _in=text, _tty_out=sys.stdout.isatty()).stdout.decode()
-        print(content, end="")
-        return 0
+
+        tty_args = {}
+        if stdio:
+            out = sys.stdout
+            err = sys.stderr
+        else:
+            out = io.StringIO()
+            err = io.StringIO()
+            tty_args.update({"_tty_out": tty})
+
+        try:
+            proc = sh.jq(*args, _in=self.input, _out=out, _err=err, **tty_args)
+            proc.wait()
+            if not stdio:
+                out = out.getvalue()
+                err = None
+        except sh.ErrorReturnCode:
+            if not stdio:
+                out = None
+                err = err.getvalue()
+
+        return out, err
 
 
 if __name__ == '__main__':
