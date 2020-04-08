@@ -1,20 +1,23 @@
 import asyncio
 import argparse_helper as argparse
+import collections
 import config_dir
 import io
+import json
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.input.defaults import create_input
-from prompt_toolkit.keys import Keys
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.layout import Layout
+import re
 import sh
 import sys
 import types
+import yaml
 
 
 def main(*args):
@@ -58,9 +61,16 @@ class Editor:
         self.buf = None
         self.status = None
         self.result = None
+        self.cache = {}
         self.error = None
         self.load()
         self.layout()
+        self.mode = Editor.CACHE_JQ_LINES
+
+    CACHE_BYTES = 'BYTES'
+    CACHE_OBJECT = 'OBJECT'
+    CACHE_JQ_LINES = 'LINES'
+    CACHE_YAML_LINES = 'YAML'
 
     def construct_key_bindings(self):
         bindings = [
@@ -68,6 +78,8 @@ class Editor:
             {"keys": ["c-c"], "args": {}, "func": "quit"},
             {"keys": ["c-@"], "args": {}, "func": "toggle_compact"},
             {"keys": ["c-r"], "args": {}, "func": "toggle_raw"},
+            {"keys": ["c-y"], "args": {}, "func": "set_mode_yaml"},
+            {"keys": ["c-j"], "args": {}, "func": "set_mode_jq"},
         ]
         cfg = {
             "bindings": bindings,
@@ -112,6 +124,18 @@ class Editor:
         self.raw = not self.raw
         self.reformat()
 
+    def set_mode_jq(self, event):
+        self.mode = Editor.CACHE_JQ_LINES
+        self.update_status_bar()
+        self.update_main_window()
+        event.app.invalidate()
+
+    def set_mode_yaml(self, event):
+        self.mode = Editor.CACHE_YAML_LINES
+        self.update_status_bar()
+        self.update_main_window()
+        event.app.invalidate()
+
     async def tick(self):
         unchanged_count = 0
         counting = False
@@ -132,20 +156,25 @@ class Editor:
                     print("error:", e)
             await asyncio.sleep(0.3)
 
-    def reformat(self):
+    def update_status_bar(self):
         args = []
         if self.compact:
             args += ["-c"]
         if self.raw:
             args += ["-r"]
 
-        self.status.text = "[" + " ".join(args) + "]"
+        self.status.text = "[{}]-[{}]".format(" ".join(args), self.mode)
+
+    def reformat(self):
+        self.update_status_bar()
 
         out, err = self.jq(tty=True)
         if out is not None:
-            out = out.splitlines()
-            maxlen = max(self.app.output.get_size().rows * 2, 100)
-            self.result.content.text = ANSI("\n".join(out[:maxlen]))
+            self.cache[Editor.CACHE_BYTES] = out
+            self.cache[Editor.CACHE_JQ_LINES] = None
+            self.cache[Editor.CACHE_OBJECT] = None
+            self.cache[Editor.CACHE_YAML_LINES] = None
+            self.update_main_window()
             self.error.content.text = None
             self.error.height = 0
             self.app.invalidate()
@@ -154,6 +183,63 @@ class Editor:
             self.error.height = err.count("\n")
 
         self.app.invalidate()
+
+    def update_main_window(self):
+        # On input, some of `self.cache` is already populated.
+        # Update the main window according to settings
+        lines = []
+        if self.mode == Editor.CACHE_JQ_LINES:
+            out = self.cache[Editor.CACHE_BYTES]
+            if self.cache[Editor.CACHE_JQ_LINES] is None:
+                self.cache[Editor.CACHE_JQ_LINES] = out.splitlines()
+            lines = self.cache[Editor.CACHE_JQ_LINES]
+        elif self.mode == Editor.CACHE_YAML_LINES:
+            if self.cache[Editor.CACHE_YAML_LINES] is None:
+                try:
+                    objects = self._get_cached_objects()
+                    out = yaml.safe_dump_all(objects)
+                except json.JSONDecodeError:
+                    out = "Error parsing stream as Yaml"
+                self.cache[Editor.CACHE_YAML_LINES] = out.splitlines()
+            lines = self.cache[Editor.CACHE_YAML_LINES]
+        else:
+            raise NotImplementedError("Unknown mode: {}".format(self.mode))
+
+        # Window positioning goes here.
+        maxlen = max(self.app.output.get_size().rows * 2, 100)
+        self.result.content.text = ANSI("\n".join(lines[:maxlen]))
+
+    _STRIP_ANSI = re.compile(r"""
+        (\001[^\002]*\002) | # zero-width sequence
+        (\033[^\[]) |        # Other escape
+        (\033 \[ [0-9;]* m)  # colour sequence
+        """, re.VERBOSE)
+
+    _NOT_WHITESPACE = re.compile(r'[^\s]')
+
+    def _get_cached_objects(self):
+        if self.cache[Editor.CACHE_OBJECT]:
+            return self.cache[Editor.CACHE_OBJECT]
+
+        out = self.cache[Editor.CACHE_BYTES]
+        out = Editor._STRIP_ANSI.sub("", out)
+        objects = []
+        parser = json.JSONDecoder()
+        offset = 0
+
+        while True:
+            match = Editor._NOT_WHITESPACE.search(out, offset)
+            if not match:
+                break
+            try:
+                obj, offset = parser.raw_decode(out, match.start())
+            except json.JSONDecodeError:
+                # do something sensible if there's some error
+                raise
+            objects.append(obj)
+
+        self.cache[Editor.CACHE_OBJECT] = objects
+        return objects
 
     def layout(self):
         self.buf = Buffer(document=Document(text=self.pattern))  # Editable buffer.
