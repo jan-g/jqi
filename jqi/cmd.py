@@ -10,7 +10,7 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.input.defaults import create_input
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout.containers import HSplit, Window
+from prompt_toolkit.layout.containers import HSplit, VSplit, Window
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.layout import Layout
 import re
@@ -18,6 +18,8 @@ import sh
 import sys
 import types
 import yaml
+
+from .completion import completer
 
 
 def main(*args):
@@ -79,14 +81,17 @@ class Editor:
         self.buf = None
         self.status = None
         self.result = None
-        self.cache = {}
+        self.cache = {Editor.CACHE_ORIGINAL_OBJECT: None}
         self.error = None
+        self.vbar = self.completions = None
+        self.counting = False
         self.load()
         self.layout()
         self.mode = Editor.CACHE_JQ_LINES
 
     CACHE_BYTES = 'BYTES'
     CACHE_OBJECT = 'OBJECT'
+    CACHE_ORIGINAL_OBJECT = 'ORIGINAL_OBJECT'
     CACHE_JQ_LINES = 'LINES'
     CACHE_YAML_LINES = 'YAML'
 
@@ -154,19 +159,35 @@ class Editor:
         self.update_main_window()
         event.app.invalidate()
 
+    def complete(self, event):
+        expr = self.buf.text
+        pos = self.buf.cursor_position
+        try:
+            comp = completer(expr, pos)
+            comps = comp(self._get_cached_original_objects())
+            self.completions.content.text = "\n".join(comps)
+        except Exception as e:
+            output = repr(e)
+            output = [output[i:i+28] for i in range(0, len(output), 28)]
+            self.completions.content.text = "\n".join(output)
+        self.counting = False
+        self.vbar.width = 1
+        self.completions.width = 30
+        event.app.invalidate()
+
     async def tick(self):
         unchanged_count = 0
-        counting = False
+        self.counting = False
         old_pattern = self.buf.text
         while True:
             if self.buf.text != old_pattern:
                 old_pattern = self.buf.text
                 unchanged_count = 0
-                counting = True
-            if counting:
+                self.counting = True
+            if self.counting:
                 unchanged_count += 1
             if unchanged_count > 2:
-                counting = False
+                self.counting = False
                 unchanged_count = 0
                 try:
                     self.reformat()
@@ -185,6 +206,7 @@ class Editor:
 
     def reformat(self):
         self.update_status_bar()
+        self.vbar.width = self.completions.width = 0
 
         out, err = self.jq(tty=True)
         if out is not None:
@@ -235,28 +257,39 @@ class Editor:
 
     _NOT_WHITESPACE = re.compile(r'[^\s]')
 
+    @staticmethod
+    def _parse_json_objects(stream):
+        objects = []
+        parser = json.JSONDecoder()
+        offset = 0
+
+        while True:
+            match = Editor._NOT_WHITESPACE.search(stream, offset)
+            if not match:
+                break
+            try:
+                obj, offset = parser.raw_decode(stream, match.start())
+            except json.JSONDecodeError:
+                # do something sensible if there's some error
+                raise
+            objects.append(obj)
+
+        return objects
+
     def _get_cached_objects(self):
         if self.cache[Editor.CACHE_OBJECT]:
             return self.cache[Editor.CACHE_OBJECT]
 
         out = self.cache[Editor.CACHE_BYTES]
         out = Editor._STRIP_ANSI.sub("", out)
-        objects = []
-        parser = json.JSONDecoder()
-        offset = 0
+        objects = self.cache[Editor.CACHE_OBJECT] = self._parse_json_objects(out)
+        return objects
 
-        while True:
-            match = Editor._NOT_WHITESPACE.search(out, offset)
-            if not match:
-                break
-            try:
-                obj, offset = parser.raw_decode(out, match.start())
-            except json.JSONDecodeError:
-                # do something sensible if there's some error
-                raise
-            objects.append(obj)
+    def _get_cached_original_objects(self):
+        if self.cache[Editor.CACHE_ORIGINAL_OBJECT]:
+            return self.cache[Editor.CACHE_ORIGINAL_OBJECT]
 
-        self.cache[Editor.CACHE_OBJECT] = objects
+        objects = self.cache[Editor.CACHE_ORIGINAL_OBJECT] = self._parse_json_objects(self.input)
         return objects
 
     def layout(self):
@@ -273,12 +306,18 @@ class Editor:
             Window(height=1, char='-', content=self.status),
 
             # Display the text 'Hello world' on the bottom.
-            w2 := Window(content=FormattedTextControl(text='Hello world')),
+            VSplit([
+                w2 := Window(content=FormattedTextControl(text='Hello world')),
+                wbar := Window(width=0, char="|"),
+                wcomp := Window(width=0, content=FormattedTextControl(text="")),
+            ]),
             w3 := Window(content=FormattedTextControl())
         ])
 
         self.result = w2
         self.error = w3
+        self.vbar = wbar
+        self.completions = wcomp
 
         layout = Layout(root_container)
         self.app = Application(layout=layout, full_screen=True, key_bindings=self.kb,

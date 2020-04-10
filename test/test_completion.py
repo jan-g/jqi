@@ -1,8 +1,7 @@
 import pytest
 from jqi.parser import Token, Field
 from jqi.lexer import Cursor, lex
-from jqi.completion import complete
-from jqi.eval import make_env
+from jqi.completion import completer
 
 
 def simplify(x):
@@ -40,6 +39,23 @@ def test_lexer(input, result):
     (".a.b##", [{"a": {"b": "c", "bb": "d"}}], [Field("b"), Field("bb")]),
     (".a|.##", [{"a": {"b": "c", "bb": "d"}}], [Token("."), Field("b"), Field("bb")]),
     (".a|.b##", [{"a": {"b": "c", "bb": "d"}}], [Field("b"), Field("bb")]),
+    (".##", [{"a":"b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+        [Token("."), Field("a"), Field("aa"), Field("b"), Field("bb")]),
+    (".a##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+        [Field("a"), Field("aa")]),
+    (".aa##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+        [Field("aa")]),
+    (".aaa##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+        []),
+    (".b##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+        [Field("b"), Field("bb")]),
+    (".bb##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+     [Field("bb")]),
+    (".bb.##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+     [Field("d"), Field("e")]),
+    (".bb.d##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+     [Field("d")]),
+    (". ##", [{"a": "b", "aa": "d"}], [Token("."), Field("a"), Field("aa")]),
 ], ids=simplify)
 def test_completion(input, stream, result):
     # Work out where the cursor is in the input
@@ -48,7 +64,6 @@ def test_completion(input, stream, result):
 
     if isinstance(result, type) and issubclass(result, Exception):
         with pytest.raises(result):
-            complete(input, cursor)
+            completer(input, cursor)
         return
-    env = make_env()
-    assert complete(input, cursor)(env, stream) == result
+    assert completer(input, cursor)(stream) == result

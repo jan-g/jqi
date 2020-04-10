@@ -127,7 +127,8 @@ def lex(s, offset=None):
     global lexer
     if offset is not None:
         cursor = Cursor(offset)
-        lexer = ((cursor.check_cursor | comment | FIELD | LITERAL | FORMAT | QQString | token | IDENT | bracket | brace | paren)
+        lexer = ((cursor.check_cursor |
+                  ws | comment | FIELD | LITERAL | FORMAT | QQString | token | IDENT | bracket | brace | paren)
                  .many()
                  .map(flatten)
                  .map(lambda l: [i for i in l if not isinstance(i, WS)]))

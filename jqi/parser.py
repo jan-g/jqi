@@ -114,6 +114,7 @@ def term():
 
         f = yield p_field.optional()          # Term FIELD
         if f is not None:
+            # Complete '.a.b'
             cursor = yield completion_point.optional()
             if cursor is not None:
                 # cursor detected, injecting completion capability
