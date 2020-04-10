@@ -1,4 +1,4 @@
-from parsy import generate, regex, string_from, match_item
+from parsy import generate, regex, string_from, match_item, Parser, Result, eof
 from json import loads
 
 
@@ -72,7 +72,9 @@ def _bracket(open, close):
     def _():
         yield match_item(open)
         lexes = yield lexer
-        yield match_item(close)
+        closer = yield match_item(close) | eof
+        if closer is None:
+            return Token(open), *lexes
         return Token(open), *lexes, Token(close)
     return _
 
@@ -80,6 +82,27 @@ def _bracket(open, close):
 bracket = _bracket("[", "]")
 brace = _bracket("{", "}")
 paren = _bracket("(", ")")
+
+
+class Cursor:
+    class CursorToken(Str):
+        pass
+
+    CURSOR = CursorToken("#CURSOR#")
+
+    def __init__(self, offset=None):
+        self.offset = offset
+        self.cursor_reported = False
+
+    @property
+    def check_cursor(self):
+        @Parser
+        def check_cursor(stream, index):
+            if self.offset is not None and index >= self.offset and not self.cursor_reported:
+                self.cursor_reported = True
+                return Result.success(len(stream), Cursor.CURSOR)
+            return Result.failure(index, "cursor")
+        return check_cursor
 
 
 def flatten(xs):
@@ -91,8 +114,23 @@ def flatten(xs):
     return [xs]
 
 
-lexer = ((ws | comment | FIELD | LITERAL | FORMAT | QQString | token | IDENT | bracket | brace | paren)
-         .many()
-         .map(flatten)
-         .map(lambda l: [i for i in l if not isinstance(i, WS)]))
+_lexer = ((ws | comment | FIELD | LITERAL | FORMAT | QQString | token | IDENT | bracket | brace | paren)
+          .many()
+          .map(flatten)
+          .map(lambda l: [i for i in l if not isinstance(i, WS)]))
 
+lexer = _lexer
+
+
+def lex(s, offset=None):
+    # For the moment: not re-entrant!
+    global lexer
+    if offset is not None:
+        cursor = Cursor(offset)
+        lexer = ((cursor.check_cursor | comment | FIELD | LITERAL | FORMAT | QQString | token | IDENT | bracket | brace | paren)
+                 .many()
+                 .map(flatten)
+                 .map(lambda l: [i for i in l if not isinstance(i, WS)]))
+    else:
+        lexer = _lexer
+    return lexer.parse(s)

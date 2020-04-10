@@ -3,7 +3,7 @@ A subset of the jq grammar
 """
 from numbers import Number
 from parsy import generate, match_item, test_item, seq, ParseError
-from .lexer import lexer, Token, Ident, Field, Str
+from .lexer import lex, Token, Ident, Field, Str
 from .eval import *
 
 """
@@ -69,9 +69,6 @@ def token(t):
 
 
 def match_type(t, description=None):
-    def _(i):
-        return isinstance(i, t)
-    return test_item(_, description=description)
     return test_item(lambda i: isinstance(i, t), description=description)
 
 
@@ -181,4 +178,4 @@ exp = exp9
 
 
 def parse(s, start=exp):
-    return start.parse(lexer.parse(s))
+    return start.parse(lex(s))
