@@ -2,9 +2,10 @@
 A subset of the jq grammar
 """
 from numbers import Number
-from parsy import generate, match_item, test_item, seq, ParseError
-from .lexer import lex, Token, Ident, Field, Str
+from parsy import generate, match_item, test_item, seq, peek, ParseError, Parser, Result
+from .lexer import lex, Token, Ident, Field, Str, Cursor
 from .eval import *
+from .completer import *
 
 """
 Combiner for the following:
@@ -77,20 +78,54 @@ p_literal = match_type(Number, "Literal")
 p_ident = match_type(Ident, "Identifier")
 
 
+completion_point = peek(match_type(Cursor.CursorToken))
+
+
+@Parser
+def location(stream, index):
+    return Result.success(index, index)
+
+
+def at(seek):
+    @Parser
+    def at(stream, index):
+        return Result.success(index, stream[seek])
+    return at
+
+
 @generate
 def term():
     t = yield (
             token(".").result(dot) |  # .
             p_field.map(field) |  # FIELD
             p_literal.map(literal) |               # LITERAL
-            token("(") >> exp << token(")") |    # ( Exp )
+            token("(") >> exp << (token(")") | completion_point.optional()) |    # ( Exp )
             p_ident.map(call)               # IDENT
     )
     while True:
+        # Completion support. We have to inject this explicitly into the grammar
+        cursor = yield completion_point.optional()
+        if cursor is not None:
+            # cursor detected, injecting completion capability
+            # Work out the previous token:
+            index = yield location
+            prev = yield at(index - 1)
+            return complete_term(prev, t)
+
         f = yield p_field.optional()          # Term FIELD
         if f is not None:
+            cursor = yield completion_point.optional()
+            if cursor is not None:
+                # cursor detected, injecting completion capability
+                return complete_field(f, t)
             t = pipe(t, field(f))
             continue
+
+        # Complete '.a.'
+        f = yield (token(".").result(dot) << completion_point).optional()
+        if f is not None:
+            return complete_field("", t)
+
         break
 
     return t
@@ -155,27 +190,12 @@ exp7 = chainr(exp6, TODO("//"))
 exp8 = chainl(exp7, operator(",", comma))
 exp9 = chainr(exp8, operator("|", pipe))
 # Binds loosest
-exp = exp9
-
-
-"""
-%precedence FUNCDEF
-%right '|'
-%left ','
-%right "//"
-%nonassoc '=' SETPIPE SETPLUS SETMINUS SETMULT SETDIV SETMOD SETDEFINEDOR
-%left OR
-%left AND
-%nonassoc NEQ EQ '<' '>' LESSEQ GREATEREQ
-%left '+' '-'
-%left '*' '/' '%'
-%precedence NONOPT /* non-optional; rules for which a specialized
-                      '?' rule should be preferred over Exp '?' */
-%precedence '?'
-%precedence "try"
-%precedence "catch"
-"""
+exp = exp9 << match_type(Cursor.CursorToken).optional()
 
 
 def parse(s, start=exp):
     return start.parse(lex(s))
+
+
+def complete(s, offset, start=exp):
+    return start.parse(lex(s, offset))
