@@ -17,6 +17,7 @@ def test_equality():
     ("# testing\n1", [1]),
     (".data", [Field("data")]),
     (".data[]", [Field("data"), Token("["), Token("]")]),
+    ("and", [Token("and")]),
 ], ids=lambda x:
     x.replace(".", "_").replace(" ", "_") if isinstance(x, str) else "".join(type(i).__name__[0] for i in x))
 def test_lexer(input, tokens):

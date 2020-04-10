@@ -41,7 +41,7 @@ ws = regex(r'[ \t\n]+').map(WS)
 comment = regex(r'#[^\r\n]*').map(WS)
 IDENT = regex(r'([a-zA-Z_][a-zA-Z_0-9]*::)*[a-zA-Z_][a-zA-Z_0-9]*').map(Ident)
 FIELD = regex(r'\.[a-zA-Z_][a-zA-Z_0-9]*').map(lambda f: Field(f[1:]))
-LITERAL = regex(r'-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?').map(float)
+LITERAL = regex(r'-?[0-9]+').map(int) | regex(r'-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?').map(float)
 FORMAT = regex(r'@[a-zA-Z0-9_]+').map(Format)
 QQString = regex(r'"(\\(["\\\/bfnrt]|u[a-fA-F0-9]{4})|[^"\\\0-\x1F\x7F]+)*"').map(loads)
 token = string_from(
@@ -91,7 +91,7 @@ def flatten(xs):
     return [xs]
 
 
-lexer = ((ws | comment | IDENT | FIELD | LITERAL | FORMAT | QQString | token | bracket | brace | paren)
+lexer = ((ws | comment | FIELD | LITERAL | FORMAT | QQString | token | IDENT | bracket | brace | paren)
          .many()
          .map(flatten)
          .map(lambda l: [i for i in l if not isinstance(i, WS)]))
