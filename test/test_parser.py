@@ -62,7 +62,11 @@ def test_field():
     ('(false, true) and (true, false)', [None], [False, True, False]),
     ('(false, true) or (true, false)', [None], [True, False, True]),
     ('1 + 2 * 3', [None], [7]),                 # Check precedence
-    ("not", [False, True, 1, [], {}, None], [True, False, False, False, False, True])
+    ("not", [False, True, 1, [], {}, None], [True, False, False, False, False, True]),
+    (".[]", [[1, 2, 3], {"a": 4, "b": 5}], [1, 2, 3, 4, 5]),
+    ("[1, 2, 3]", [None, None], [[1, 2, 3], [1, 2, 3]]),
+    ('."a"', [{}, {"a": "b"}], [None, "b"]),
+    ('."a"."b"', [{}, {"a": {"b": "c"}}], [None, "c"]),
 ], ids=simplify)
 def test_exp(input, stream, result):
     if isinstance(result, type) and issubclass(result, Exception):

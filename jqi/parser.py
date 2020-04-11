@@ -3,7 +3,7 @@ A subset of the jq grammar
 """
 from numbers import Number
 from parsy import generate, match_item, test_item, seq, peek, ParseError, Parser, Result
-from .lexer import lex, Token, Ident, Field, Str, Cursor
+from .lexer import lex, Token, Ident, Field, String, Cursor, PartialString
 from .eval import *
 from .completer import *
 
@@ -96,20 +96,24 @@ def at(seek):
 @generate
 def term():
     t = yield (
+            (token(".") >> match_type(String)).map(field) |     # . String
+            (token(".") >> match_type(PartialString) << completion_point).map(field) |
             token(".").result(dot) |  # .
             p_field.map(field) |  # FIELD
             p_literal.map(literal) |               # LITERAL
             token("(") >> exp << (token(")") | completion_point.optional()) |    # ( Exp )
-            p_ident.map(call)               # IDENT
+            p_ident.map(call) |              # IDENT
+            (token("[") >> exp << token("]")).map(collect)     # [ Exp ]
     )
     while True:
+        # Work out the previous token:
+        index = yield location
+        prev = yield at(index - 1)
+
         # Completion support. We have to inject this explicitly into the grammar
         cursor = yield completion_point.optional()
         if cursor is not None:
             # cursor detected, injecting completion capability
-            # Work out the previous token:
-            index = yield location
-            prev = yield at(index - 1)
             return complete_term(prev, t)
 
         f = yield p_field.optional()          # Term FIELD
@@ -122,10 +126,26 @@ def term():
             t = pipe(t, field(f))
             continue
 
-        # Complete '.a.'
-        f = yield (token(".").result(dot) << completion_point).optional()
-        if f is not None:
-            return complete_field("", t)
+        d = yield token(".").optional()         # Term . String
+        if d is not None:
+            # Complete '.a.'
+            c = yield completion_point.optional()
+            if c is not None:
+                return complete_field("", t)
+
+            s = yield (match_type(PartialString) << completion_point).optional()
+            # Complete ' ."a '
+            if s is not None:
+                return complete_field(s, t)
+
+            s = yield match_type(String)
+            t = pipe(t, field(s))
+            continue
+
+        b = yield seq(token("["), token("]")).optional()    # Term [ ]
+        if b is not None:
+            t = pipe(t, iterate)
+            continue
 
         break
 
@@ -142,7 +162,6 @@ Remaining items in Term:
         '.' String '?'       |
         FIELD '?'            |
         IDENT '(' Args ')'   |
-        '(' Exp ')'     |
         '[' Exp ']'     |
         '[' ']'         |
         '{' MkDict '}'  |
@@ -151,7 +170,6 @@ Remaining items in Term:
         Term FIELD '?'       |
         Term '.' String      |
         Term '.' String '?'  |
-        Term '[' ']'                  |
         Term '[' ']' '?'              |
         Term '[' Exp ']'              |
         Term '[' Exp ']' '?'          |

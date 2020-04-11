@@ -1,5 +1,5 @@
 import pytest
-from jqi.parser import Token, Field
+from jqi.parser import Token, Field, PartialString
 from jqi.lexer import Cursor, lex
 from jqi.completion import completer
 
@@ -22,6 +22,7 @@ def simplify(x):
     ("(.a##", [Token("("), Field("a"), Cursor.CURSOR]),
     ("(.##)", [Token("("), Token("."), Cursor.CURSOR]),
     ("(.a##)", [Token("("), Field("a"), Cursor.CURSOR]),
+    ('"abc##', [PartialString("abc"), Cursor.CURSOR]),
 ], ids=simplify)
 def test_lexer(input, result):
     # Work out where the cursor is in the input
@@ -56,6 +57,8 @@ def test_lexer(input, result):
     (".bb.d##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
      [Field("d")]),
     (". ##", [{"a": "b", "aa": "d"}], [Token("."), Field("a"), Field("aa")]),
+    ('."##', [{"a": "b", "aa": "d"}], [Field("a"), Field("aa")]),
+    ('."a"."##', [{"a": {"aaa": "b", "aa": "d"}}], [Field("aa"), Field("aaa")]),
 ], ids=simplify)
 def test_completion(input, stream, result):
     # Work out where the cursor is in the input

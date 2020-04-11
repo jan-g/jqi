@@ -1,3 +1,4 @@
+from numbers import Number
 from .error import Error
 
 
@@ -122,6 +123,30 @@ def call(ident, *argfs):
         return env, results
 
     return apply
+
+
+def iterate(env, stream):
+    result = []
+    for item in stream:
+        if isinstance(item, (Number, str, type(None))):
+            raise ValueError("can't iterate over {}".format(type(item).__name__))
+        elif isinstance(item, list):
+            result.extend(item)
+        elif isinstance(item, dict):
+            result.extend(item.values())
+        else:
+            raise ValueError("can't iterate over {}".format(type(item).__name__))
+    return env, result
+
+
+def collect(exp):
+    def collect(env, stream):
+        result = []
+        for item in stream:
+            _, items = exp(env, [item])
+            result.append(items)
+        return env, result
+    return collect
 
 
 def make_env():

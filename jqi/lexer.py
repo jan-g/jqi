@@ -1,4 +1,4 @@
-from parsy import generate, regex, string_from, match_item, Parser, Result, eof
+from parsy import generate, regex, string_from, match_item, Parser, Result, eof, seq
 from json import loads
 
 
@@ -37,13 +37,22 @@ class Token(Str):
     pass
 
 
+class String(Str):
+    pass
+
+
+class PartialString(Str):
+    pass
+
+
 ws = regex(r'[ \t\n]+').map(WS)
 comment = regex(r'#[^\r\n]*').map(WS)
 IDENT = regex(r'([a-zA-Z_][a-zA-Z_0-9]*::)*[a-zA-Z_][a-zA-Z_0-9]*').map(Ident)
 FIELD = regex(r'\.[a-zA-Z_][a-zA-Z_0-9]*').map(lambda f: Field(f[1:]))
 LITERAL = regex(r'-?[0-9]+').map(int) | regex(r'-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?').map(float)
 FORMAT = regex(r'@[a-zA-Z0-9_]+').map(Format)
-QQString = regex(r'"(\\(["\\\/bfnrt]|u[a-fA-F0-9]{4})|[^"\\\0-\x1F\x7F]+)*"').map(loads)
+JSON_STRING_REGEX= r'(\\(["\\\/bfnrt]|u[a-fA-F0-9]{4})|[^"\\\0-\x1F\x7F]+)*'
+QQString = regex(rf'"{JSON_STRING_REGEX}"').map(loads).map(String)
 token = string_from(
     "!=",
     "==",
@@ -127,8 +136,11 @@ def lex(s, offset=None):
     global lexer
     if offset is not None:
         cursor = Cursor(offset)
+        Q_String = seq(regex(rf'"{JSON_STRING_REGEX}').map(lambda s: PartialString(loads(s + '"'))),
+                       cursor.check_cursor)
+
         lexer = ((cursor.check_cursor |
-                  ws | comment | FIELD | LITERAL | FORMAT | QQString | token | IDENT | bracket | brace | paren)
+                  ws | comment | FIELD | LITERAL | FORMAT | QQString | Q_String | token | IDENT | bracket | brace | paren)
                  .many()
                  .map(flatten)
                  .map(lambda l: [i for i in l if not isinstance(i, WS)]))

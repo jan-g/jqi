@@ -1,4 +1,4 @@
-from .parser import Field, Token, Ident
+from .parser import Field, Token, Ident, PartialString
 
 
 class Completion(Exception):
@@ -24,7 +24,7 @@ def complete_term(term, evaluator):
             samples = sample_objects(stream)
             raise Completion(completions=[Token(".")] + [Field(k) for k in samples])
         return complete_term
-    elif isinstance(term, Field):
+    elif isinstance(term, (Field, PartialString)):
         def complete_term(env, stream):
             samples = sample_objects(stream)
             raise Completion(completions=[Field(k) for k in samples if k.startswith(term)])
