@@ -85,6 +85,7 @@ class Editor:
         self.error = None
         self.vbar = self.completions = None
         self.counting = False
+        self.old_pattern = None
         self.load()
         self.layout()
         self.mode = Editor.CACHE_JQ_LINES
@@ -170,7 +171,11 @@ class Editor:
             output = repr(e)
             output = [output[i:i+28] for i in range(0, len(output), 28)]
             self.completions.content.text = "\n".join(output)
+
+        # Turn off the display update
         self.counting = False
+        self.old_pattern = self.buf.text
+
         self.vbar.width = 1
         self.completions.width = 30
         event.app.invalidate()
@@ -178,10 +183,10 @@ class Editor:
     async def tick(self):
         unchanged_count = 0
         self.counting = False
-        old_pattern = self.buf.text
+        self.old_pattern = self.buf.text
         while True:
-            if self.buf.text != old_pattern:
-                old_pattern = self.buf.text
+            if self.buf.text != self.old_pattern:
+                self.old_pattern = self.buf.text
                 unchanged_count = 0
                 self.counting = True
             if self.counting:
