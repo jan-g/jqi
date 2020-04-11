@@ -102,6 +102,7 @@ class Editor(Refresh):
             {"keys": ["c-r"], "args": {}, "func": "toggle_raw"},
             {"keys": ["c-y"], "args": {}, "func": "set_mode_yaml"},
             {"keys": ["c-j"], "args": {}, "func": "set_mode_jq"},
+            {"keys": ["c-i"], "args": {}, "func": "complete"},
         ]
         cfg = {
             "bindings": bindings,
