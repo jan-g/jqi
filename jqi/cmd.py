@@ -1,6 +1,4 @@
-import asyncio
 import argparse_helper as argparse
-import collections
 import config_dir
 import io
 import json
@@ -19,6 +17,7 @@ import sys
 import types
 import yaml
 
+from .editor import Refresh
 from .completion import completer
 
 
@@ -67,8 +66,9 @@ def list_stored(long=False):
             print("{}\t{}".format(name, cfg["pattern"].splitlines()[0]))
 
 
-class Editor:
-    def __init__(self, file=None):
+class Editor(Refresh):
+    def __init__(self, file=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.file = file
         self.pattern = "."
         self.compact = False
@@ -84,8 +84,6 @@ class Editor:
         self.cache = {Editor.CACHE_ORIGINAL_OBJECT: None}
         self.error = None
         self.vbar = self.completions = None
-        self.counting = False
-        self.old_pattern = None
         self.load()
         self.layout()
         self.mode = Editor.CACHE_JQ_LINES
@@ -173,32 +171,11 @@ class Editor:
             self.completions.content.text = "\n".join(output)
 
         # Turn off the display update
-        self.counting = False
-        self.old_pattern = self.buf.text
+        self.disable_refresh()
 
         self.vbar.width = 1
         self.completions.width = 30
         event.app.invalidate()
-
-    async def tick(self):
-        unchanged_count = 0
-        self.counting = False
-        self.old_pattern = self.buf.text
-        while True:
-            if self.buf.text != self.old_pattern:
-                self.old_pattern = self.buf.text
-                unchanged_count = 0
-                self.counting = True
-            if self.counting:
-                unchanged_count += 1
-            if unchanged_count > 2:
-                self.counting = False
-                unchanged_count = 0
-                try:
-                    self.reformat()
-                except Exception as e:
-                    print("error:", e)
-            await asyncio.sleep(0.3)
 
     def update_status_bar(self):
         args = []
@@ -328,14 +305,17 @@ class Editor:
         self.app = Application(layout=layout, full_screen=True, key_bindings=self.kb,
                                input=create_input(always_prefer_tty=True))
 
+    def get_pattern(self):
+        return self.buf.text
+
     def run(self, text):
         self.input = text
-        task = asyncio.get_event_loop().create_task(self.tick())
+        self.create_refresh_task(refresh=self.reformat, get_pattern=self.get_pattern)
         self.reformat()
 
         # Run the application, and wait for it to finish.
         result = self.app.run()
-        task.cancel()
+        self.cancel_refresh_task()
 
         if result != 0:
             return result
