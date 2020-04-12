@@ -11,6 +11,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout.containers import HSplit, VSplit, Window
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.layout import Layout
+from prompt_toolkit.layout.menus import CompletionsMenu
 import re
 import sh
 import sys
@@ -261,6 +262,7 @@ class Editor(Refresh):
 
         root_container = HSplit([
             Window(height=3, content=BufferControl(buffer=self.buf, menu_position=lambda: self.buf.cursor_position)),
+            CompletionsMenu(),
 
             # A vertical line in the middle. We explicitly specify the height, to
             # make sure that the layout engine will not try to divide the whole
