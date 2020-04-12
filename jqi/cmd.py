@@ -98,7 +98,7 @@ class Editor(Refresh):
         bindings = [
             {"keys": ["c-x"], "args": dict(eager=True), "func": "exit"},
             {"keys": ["c-c"], "args": {}, "func": "quit"},
-            {"keys": ["c-p"], "args": {}, "func": "toggle_compact"},
+            {"keys": ["c-@"], "args": {}, "func": "toggle_compact"},
             {"keys": ["c-r"], "args": {}, "func": "toggle_raw"},
             {"keys": ["c-y"], "args": {}, "func": "set_mode_yaml"},
             {"keys": ["c-j"], "args": {}, "func": "set_mode_jq"},
@@ -209,8 +209,9 @@ class Editor(Refresh):
             raise NotImplementedError("Unknown mode: {}".format(self.mode))
 
         # Window positioning goes here.
+        maxwidth = max(self.app.output.get_size().columns * 10, 160)
         maxlen = max(self.app.output.get_size().rows * 2, 100)
-        self.result.content.text = ANSI("\n".join(lines[:maxlen]))
+        self.result.content.text = ANSI("\n".join(line[:maxwidth] for line in lines[:maxlen]))
 
     _STRIP_ANSI = re.compile(r"""
         (\001[^\002]*\002) | # zero-width sequence
@@ -261,7 +262,7 @@ class Editor(Refresh):
         self.status = FormattedTextControl(text="")  # Status line
 
         root_container = HSplit([
-            Window(height=3, content=BufferControl(buffer=self.buf, menu_position=lambda: self.buf.cursor_position)),
+            Window(height=3, content=BufferControl(buffer=self.buf)),
             CompletionsMenu(),
 
             # A vertical line in the middle. We explicitly specify the height, to
