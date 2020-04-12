@@ -15,6 +15,6 @@ def completer(s, offset, start=exp):
             _, _ = evaluator(env, stream)
             return []
         except Completion as c:
-            return c.completions
+            return c.completions, c.pos
 
     return complete

@@ -1,11 +1,28 @@
-from parsy import generate, regex, string_from, match_item, Parser, Result, eof, seq
+from parsy import generate, regex, string_from, match_item, Parser, Result, eof, seq, index
 from json import loads
 
 
 class Str(str):
+    @classmethod
+    def make(cls, start_body_end):
+        (start, body, end) = start_body_end
+        item = cls(body)
+        item.pos = (start, end)
+        return item
+
+    @property
+    def start(self):
+        return self.pos[0]
+
+    @property
+    def end(self):
+        return self.pos[1]
+
     def __eq__(self, other):
         if type(self) is type(other) or type(other) is str:
-            return str(self) == str(other)
+            self_pos = getattr(self, "pos", None)
+            other_pos = getattr(other, "pos", None)
+            return str(self) == str(other) and (self_pos is None or other_pos is None or self_pos == other_pos)
         return False
 
     def __ne__(self, other):
@@ -26,7 +43,15 @@ class Ident(Str):
 
 
 class Field(Str):
-    pass
+    @classmethod
+    def make(cls, start_body_end):
+        # The field name leaves out the leading '.'
+        # The field position leaves out the leading '.'
+        # This makes completion a little easier
+        (start, body, end) = start_body_end
+        item = cls(body[1:])
+        item.pos = (start + 1, end)
+        return item
 
 
 class Format(Str):
@@ -38,22 +63,61 @@ class Token(Str):
 
 
 class String(Str):
-    pass
+    @classmethod
+    def make(cls, start_body_end):
+        (start, body, end) = start_body_end
+        item = cls(loads(body))
+        item.pos = (start, end)
+        return item
 
 
 class PartialString(Str):
-    pass
+    @classmethod
+    def make(cls, start_body_end):
+        (start, body, end) = start_body_end
+        item = cls(loads(body + '"'))
+        item.pos = (start, end)
+        return item
+
+
+class Int(int):
+    @classmethod
+    def make(cls, start_body_end):
+        (start, body, end) = start_body_end
+        item = cls(body)
+        item.pos = (start, end)
+        return item
+
+
+class Float(float):
+    @classmethod
+    def make(cls, start_body_end):
+        (start, body, end) = start_body_end
+        item = cls(body)
+        item.pos = (start, end)
+        return item
+
+
+def mark(parser):
+    @generate
+    def mark():
+        start = yield index
+        item = yield parser
+        end = yield index
+        return start, item, end
+    return mark
 
 
 ws = regex(r'[ \t\n]+').map(WS)
 comment = regex(r'#[^\r\n]*').map(WS)
-IDENT = regex(r'([a-zA-Z_][a-zA-Z_0-9]*::)*[a-zA-Z_][a-zA-Z_0-9]*').map(Ident)
-FIELD = regex(r'\.[a-zA-Z_][a-zA-Z_0-9]*').map(lambda f: Field(f[1:]))
-LITERAL = regex(r'-?[0-9]+').map(int) | regex(r'-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?').map(float)
-FORMAT = regex(r'@[a-zA-Z0-9_]+').map(Format)
+IDENT = mark(regex(r'([a-zA-Z_][a-zA-Z_0-9]*::)*[a-zA-Z_][a-zA-Z_0-9]*')).map(Ident.make)
+FIELD = mark(regex(r'\.[a-zA-Z_][a-zA-Z_0-9]*')).map(Field.make)
+LITERAL = (mark(regex(r'-?[0-9]+')).map(Int.make) |
+           mark(regex(r'-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?')).map(Float.make))
+FORMAT = mark(regex(r'@[a-zA-Z0-9_]+')).map(Format.make)
 JSON_STRING_REGEX= r'(\\(["\\\/bfnrt]|u[a-fA-F0-9]{4})|[^"\\\0-\x1F\x7F]+)*'
-QQString = regex(rf'"{JSON_STRING_REGEX}"').map(loads).map(String)
-token = string_from(
+QQString = mark(regex(rf'"{JSON_STRING_REGEX}"')).map(String.make)
+token = mark(string_from(
     "!=",
     "==",
     "as",
@@ -73,7 +137,7 @@ token = string_from(
     "__loc__",
     "|=", "+=", "-=", "*=", "/=", "%=", "//=", "<=", ">=", "..", "?//",
     ".", "?", "=", ";", ",", ":", "|", "+", "-", "*", "/", "%", "\$", "<", ">",
-).map(Token)
+)).map(Token.make)
 
 
 def _bracket(open, close):
@@ -136,7 +200,7 @@ def lex(s, offset=None):
     global lexer
     if offset is not None:
         cursor = Cursor(offset)
-        Q_String = seq(regex(rf'"{JSON_STRING_REGEX}').map(lambda s: PartialString(loads(s + '"'))),
+        Q_String = seq(mark(regex(rf'"{JSON_STRING_REGEX}')).map(PartialString.make),
                        cursor.check_cursor)
 
         lexer = ((cursor.check_cursor |

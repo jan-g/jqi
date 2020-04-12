@@ -2,7 +2,7 @@
 A subset of the jq grammar
 """
 from numbers import Number
-from parsy import generate, match_item, test_item, seq, peek, ParseError, Parser, Result
+from parsy import generate, match_item, test_item, seq, peek, ParseError, Parser, Result, index
 from .lexer import lex, Token, Ident, Field, String, Cursor, PartialString
 from .eval import *
 from .completer import *
@@ -81,11 +81,6 @@ p_ident = match_type(Ident, "Identifier")
 completion_point = peek(match_type(Cursor.CursorToken))
 
 
-@Parser
-def location(stream, index):
-    return Result.success(index, index)
-
-
 def at(seek):
     @Parser
     def at(stream, index):
@@ -107,8 +102,8 @@ def term():
     )
     while True:
         # Work out the previous token:
-        index = yield location
-        prev = yield at(index - 1)
+        idx = yield index
+        prev = yield at(idx - 1)
 
         # Completion support. We have to inject this explicitly into the grammar
         cursor = yield completion_point.optional()
@@ -131,7 +126,7 @@ def term():
             # Complete '.a.'
             c = yield completion_point.optional()
             if c is not None:
-                return complete_field("", t)
+                return complete_field(Field.make((d.start, ".", d.end)), t)     # Synthesise a position
 
             s = yield (match_type(PartialString) << completion_point).optional()
             # Complete ' ."a '
