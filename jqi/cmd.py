@@ -17,8 +17,7 @@ import sys
 import types
 import yaml
 
-from .editor import Refresh
-from .completion import completer
+from .editor import Refresh, JQCompleter
 
 
 def main(*args):
@@ -98,11 +97,10 @@ class Editor(Refresh):
         bindings = [
             {"keys": ["c-x"], "args": dict(eager=True), "func": "exit"},
             {"keys": ["c-c"], "args": {}, "func": "quit"},
-            {"keys": ["c-@"], "args": {}, "func": "toggle_compact"},
+            {"keys": ["c-p"], "args": {}, "func": "toggle_compact"},
             {"keys": ["c-r"], "args": {}, "func": "toggle_raw"},
             {"keys": ["c-y"], "args": {}, "func": "set_mode_yaml"},
             {"keys": ["c-j"], "args": {}, "func": "set_mode_jq"},
-            {"keys": ["c-i"], "args": {}, "func": "complete"},
         ]
         cfg = {
             "bindings": bindings,
@@ -157,25 +155,6 @@ class Editor(Refresh):
         self.mode = Editor.CACHE_YAML_LINES
         self.update_status_bar()
         self.update_main_window()
-        event.app.invalidate()
-
-    def complete(self, event):
-        expr = self.buf.text
-        pos = self.buf.cursor_position
-        try:
-            comp = completer(expr, pos)
-            comps = comp(self._get_cached_original_objects())
-            self.completions.content.text = "\n".join(comps)
-        except Exception as e:
-            output = repr(e)
-            output = [output[i:i+28] for i in range(0, len(output), 28)]
-            self.completions.content.text = "\n".join(output)
-
-        # Turn off the display update
-        self.disable_refresh()
-
-        self.vbar.width = 1
-        self.completions.width = 30
         event.app.invalidate()
 
     def update_status_bar(self):
@@ -276,11 +255,12 @@ class Editor(Refresh):
         return objects
 
     def layout(self):
-        self.buf = Buffer(document=Document(text=self.pattern))  # Editable buffer.
+        completer = JQCompleter(object_source=self._get_cached_original_objects)
+        self.buf = Buffer(document=Document(text=self.pattern), completer=completer)  # Editable buffer.
         self.status = FormattedTextControl(text="")  # Status line
 
         root_container = HSplit([
-            Window(height=3, content=BufferControl(buffer=self.buf)),
+            Window(height=3, content=BufferControl(buffer=self.buf, menu_position=lambda: self.buf.cursor_position)),
 
             # A vertical line in the middle. We explicitly specify the height, to
             # make sure that the layout engine will not try to divide the whole

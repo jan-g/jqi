@@ -32,35 +32,35 @@ def test_lexer(input, result):
     assert lex(input, offset=cursor) == result
 
 
-@pytest.mark.parametrize("input,stream,result", [
-    (".##", [{"a": "b", "aa": "d"}], [Token("."), Field("a"), Field("aa")]),
-    (".a##", [{"a": "b", "aa": "d"}], [Field("a"), Field("aa")]),
-    ("(.##", [{"a": "b", "aa": "d"}], [Token("."), Field("a"), Field("aa")]),
-    (".a.##", [{"a": {"b": "c", "bb": "d"}}], [Field("b"), Field("bb")]),
-    (".a.b##", [{"a": {"b": "c", "bb": "d"}}], [Field("b"), Field("bb")]),
-    (".a|.##", [{"a": {"b": "c", "bb": "d"}}], [Token("."), Field("b"), Field("bb")]),
-    (".a|.b##", [{"a": {"b": "c", "bb": "d"}}], [Field("b"), Field("bb")]),
-    (".##", [{"a":"b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
-        [Token("."), Field("a"), Field("aa"), Field("b"), Field("bb")]),
-    (".a##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+@pytest.mark.parametrize("input,stream,pos,result", [
+    (".##", [{"a": "b", "aa": "d"}], (1, 1), [Token(""), Field("a"), Field("aa")]),
+    (".a##", [{"a": "b", "aa": "d"}], (1, 2), [Field("a"), Field("aa")]),
+    ("(.##", [{"a": "b", "aa": "d"}], (2, 2), [Token(""), Field("a"), Field("aa")]),
+    (".a.##", [{"a": {"b": "c", "bb": "d"}}], (3, 3), [Field("b"), Field("bb")]),
+    (".a.b##", [{"a": {"b": "c", "bb": "d"}}], (3, 4), [Field("b"), Field("bb")]),
+    (".a|.##", [{"a": {"b": "c", "bb": "d"}}], (4, 4), [Token(""), Field("b"), Field("bb")]),
+    (".a|.b##", [{"a": {"b": "c", "bb": "d"}}], (4, 5), [Field("b"), Field("bb")]),
+    (".##", [{"a":"b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}], (1, 1),
+        [Token(""), Field("a"), Field("aa"), Field("b"), Field("bb")]),
+    (".a##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}], (1, 2),
         [Field("a"), Field("aa")]),
-    (".aa##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+    (".aa##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}], (1, 3),
         [Field("aa")]),
-    (".aaa##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+    (".aaa##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}], (1, 4),
         []),
-    (".b##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+    (".b##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}], (1, 2),
         [Field("b"), Field("bb")]),
-    (".bb##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+    (".bb##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}], (1, 3),
      [Field("bb")]),
-    (".bb.##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+    (".bb.##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}], (4, 4),
      [Field("d"), Field("e")]),
-    (".bb.d##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}],
+    (".bb.d##", [{"a": "b", "aa": "bb", "b": "c", "bb": {"d": "dd", "e": "ee"}}], (4, 5),
      [Field("d")]),
-    (". ##", [{"a": "b", "aa": "d"}], [Token("."), Field("a"), Field("aa")]),
-    ('."##', [{"a": "b", "aa": "d"}], [Field("a"), Field("aa")]),
-    ('."a"."##', [{"a": {"aaa": "b", "aa": "d"}}], [Field("aa"), Field("aaa")]),
+    (". ##", [{"a": "b", "aa": "d"}], (1, 1), [Token(""), Field("a"), Field("aa")]),
+    ('."##', [{"a": "b", "aa": "d"}], (1, 2), [Field("a"), Field("aa")]),
+    ('."a"."##', [{"a": {"aaa": "b", "aa": "d"}}], (5, 6), [Field("aa"), Field("aaa")]),
 ], ids=simplify)
-def test_completion(input, stream, result):
+def test_completion(input, stream, pos, result):
     # Work out where the cursor is in the input
     cursor = input.index("##")
     input = input[:cursor] + input[cursor + 2:]
@@ -69,4 +69,4 @@ def test_completion(input, stream, result):
         with pytest.raises(result):
             completer(input, cursor)
         return
-    assert completer(input, cursor)(stream) == result
+    assert completer(input, cursor)(stream) == (result, pos)
