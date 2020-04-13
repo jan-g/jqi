@@ -1,7 +1,7 @@
 import pytest
 from jqi.parser import parse, Token, Field, Ident, term, exp, ParseError
 from jqi.error import Error
-from jqi.eval import make_env, evaluate, pipe, binding, literal, variable
+from jqi.eval import make_env, pipe, binding, literal, variable
 from jqi import parser
 
 
@@ -20,10 +20,10 @@ def test_variable():
     evaluator = parse("$x", start=exp)
     env = make_env()
     env.update({"$x": 1})
-    assert evaluate(evaluator, env, [None]) == [(env, 1)]
+    assert evaluator(env, [None]) == (env, [1])
 
 
 def test_binding():
     env = make_env()
-    evaluator = pipe(binding(literal(1), "x"), variable("x"))
-    assert evaluate(evaluator, env, [None]) == [(env, 1)]
+    evaluator = binding(literal(1), Ident("x"), variable("x"))
+    assert evaluator(env, [None]) == (env, [1])
