@@ -79,7 +79,7 @@ class ObjectMatch(Match):
 
 class KeyMatch(Match):
     def __init__(self, key, matcher):
-        self.key = key
+        self.key = str(key)
         self.matcher = matcher
 
     def bindings(self, env, stream, item):
@@ -103,5 +103,5 @@ class ExpMatch(Match):
         results = []
         _, keys = self.exp(env, stream)
         for key in keys:
-            results.extend(self.matcher.bindings(env, stream, item.get(key)))
+            results.extend(self.matcher.bindings(env, stream, item.get(str(key))))
         return results

@@ -2,7 +2,7 @@
 A subset of the jq grammar
 """
 from numbers import Number
-from parsy import generate, match_item, test_item, seq, peek, ParseError, Parser, Result, index
+from parsy import generate, match_item, test_item, seq, peek, ParseError, Parser, Result, index, fail
 from .lexer import lex, Token, Ident, Field, String, Cursor, PartialString
 from .eval import *
 from .completer import *
@@ -206,31 +206,23 @@ def pattern():
     if bare_var is not None:
         return ValueMatch(bare_var)
 
-    aps = yield (token("[") >> pattern.sep_by(token(",")) << token("]")).optional()
+    aps = yield (token("[") >> pattern.sep_by(token(","), min=1) << token("]")).optional()
     if aps is not None:
         return ArrayMatch(*aps)
 
-"""
-Pattern:
-       '$' IDENT           |
-        '[' ArrayPats ']'  |
-        '{' ObjPats '}' 
+    ops = yield (token("{") >> (
+            # Just as {foo} is a handy way of writing {foo: .foo}, so {$foo} is a handy way of writing {foo:$foo}
+            (token("$") >> match_type(Ident)).map(lambda i: KeyMatch(i, ValueMatch(i))) |
 
-ArrayPats:
-        Pattern  |
-        ArrayPats ',' Pattern 
+            seq(match_type(Ident) << token(":"), pattern).map(lambda ip: KeyMatch(ip[0], ip[1])) |
+            seq(match_type(String) << token(":"), pattern).map(lambda ip: KeyMatch(ip[0], ip[1])) |
 
-ObjPats:
-        ObjPat  |
-        ObjPats ',' ObjPat 
+            seq(token("(") >> exp << token(")") << token(":"), pattern).map(lambda ep: ExpMatch(ep[0], ep[1]))
+    ).sep_by(token(","), min=1) << token("}")).optional()
+    if ops is not None:
+        return ObjectMatch(*ops)
 
-ObjPat:
-        '$' IDENT                |      # Just as {foo} is a handy way of writing {foo: .foo}, so {$foo} is a handy way of writing {foo:$foo}
-        IDENT       ':' Pattern  |
-        Keyword     ':' Pattern  |
-        String      ':' Pattern  |
-        '(' Exp ')' ':' Pattern
-"""
+    yield fail("pattern")
 
 
 def parse(s, start=exp):
