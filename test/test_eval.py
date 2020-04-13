@@ -1,8 +1,7 @@
 import pytest
 from jqi.parser import parse, Token, Field, Ident, term, exp, ParseError
-from jqi.error import Error
 from jqi.eval import make_env, pipe, binding, literal, variable
-from jqi import parser
+from jqi.pattern import *
 
 
 def simplify(x):
@@ -25,5 +24,5 @@ def test_variable():
 
 def test_binding():
     env = make_env()
-    evaluator = binding(literal(1), Ident("x"), variable("x"))
+    evaluator = binding(literal(1), ValueMatch("x"), variable("x"))
     assert evaluator(env, [None]) == (env, [1])

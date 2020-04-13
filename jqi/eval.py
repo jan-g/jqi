@@ -75,16 +75,17 @@ def variable(v):
 
 def binding(term, pattern, exp):
     # TODO: complex destructuring
-    ident_name = "${}".format(pattern)
     def binding(env, stream):
         results = []
         for item in stream:
             # Work out the value(s) to bind
             _, values = term(env, [item])
             for value in values:
-                env2 = env.child({ident_name: value})
-                _, items = exp(env2, [item])
-                results.extend(items)
+                bindings = pattern.bindings(env, stream, value)
+                for binding in bindings:
+                    env2 = env.child(binding)
+                    _, items = exp(env2, [item])
+                    results.extend(items)
         return env, results
     return binding
 

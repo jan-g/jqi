@@ -25,6 +25,8 @@ def simplify(x):
     ("1", [1, 2, 3], [1, 1, 1]),
     ("-1", [1, 2, 3], [-1, -1, -1]),
     ("(1, 2)", [None], [1, 2]),
+    ('"a"', [None], ["a"]),
+    ('[]', [None], [[]]),
 ], ids=simplify)
 def test_term(input, stream, result):
     if isinstance(result, type) and issubclass(result, Exception):

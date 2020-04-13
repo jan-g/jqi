@@ -6,6 +6,7 @@ from parsy import generate, match_item, test_item, seq, peek, ParseError, Parser
 from .lexer import lex, Token, Ident, Field, String, Cursor, PartialString
 from .eval import *
 from .completer import *
+from .pattern import *
 
 """
 Combiners to produce left-associative, right-associative and non-associative precedence-aware parsers.
@@ -77,6 +78,7 @@ def at(seek):
 @generate
 def term():
     t = yield (
+            match_type(String).map(literal) |  # String
             (token(".") >> match_type(String)).map(field) |     # . String
             (token(".") >> match_type(PartialString) << completion_point).map(field) |
             token(".").result(dot) |  # .
@@ -85,6 +87,7 @@ def term():
             token("(") >> exp << (token(")") | completion_point.optional()) |    # ( Exp )
             p_ident.map(call) |              # IDENT
             (token("[") >> exp << token("]")).map(collect) |    # [ Exp ]
+            seq(token("["), token("]")).result(literal([])) |   # [ ]
             (token("$") >> match_type(Ident)).map(variable)     # $ IDENT
     )
     while True:
@@ -137,20 +140,15 @@ def term():
 """
 Remaining items in Term:
         ".."  |
-        String   |
         FORMAT   |
         "break" '$' IDENT    |
-        '.' String           |
         '.' String '?'       |
         FIELD '?'            |
         IDENT '(' Args ')'   |
-        '[' Exp ']'     |
         '[' ']'         |
         '{' MkDict '}'  |
         '$' "__loc__"   |
-        '$' IDENT       |
         Term FIELD '?'       |
-        Term '.' String      |
         Term '.' String '?'  |
         Term '[' ']' '?'              |
         Term '[' Exp ']'              |
@@ -206,7 +204,11 @@ def exp():
 def pattern():
     bare_var = yield (token("$") >> match_type(Ident)).optional()
     if bare_var is not None:
-        return
+        return ValueMatch(bare_var)
+
+    aps = yield (token("[") >> pattern.sep_by(token(",")) << token("]")).optional()
+    if aps is not None:
+        return ArrayMatch(*aps)
 
 """
 Pattern:
