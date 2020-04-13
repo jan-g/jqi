@@ -25,6 +25,7 @@ def field_name(k):
     else:
         return String(k)
 
+
 def complete_term(term, evaluator):
     if term == Token("."):
         pos = (term.start + 1, term.end)

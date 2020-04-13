@@ -8,24 +8,10 @@ from .eval import *
 from .completer import *
 
 """
-Combiner for the following:
-
-%precedence FUNCDEF
-%right '|'
-%left ','
-%right "//"
-%nonassoc '=' SETPIPE SETPLUS SETMINUS SETMULT SETDIV SETMOD SETDEFINEDOR
-%left OR
-%left AND
-%nonassoc NEQ EQ '<' '>' LESSEQ GREATEREQ
-%left '+' '-'
-%left '*' '/' '%'
-%precedence NONOPT /* non-optional; rules for which a specialized
-                      '?' rule should be preferred over Exp '?' */
-%precedence '?'
-%precedence "try"
-%precedence "catch"
+Combiners to produce left-associative, right-associative and non-associative precedence-aware parsers.
 """
+
+
 def chainl(item, op):
     @generate
     def _():
@@ -98,7 +84,8 @@ def term():
             p_literal.map(literal) |               # LITERAL
             token("(") >> exp << (token(")") | completion_point.optional()) |    # ( Exp )
             p_ident.map(call) |              # IDENT
-            (token("[") >> exp << token("]")).map(collect)     # [ Exp ]
+            (token("[") >> exp << token("]")).map(collect) |    # [ Exp ]
+            (token("$") >> match_type(Ident)).map(variable)     # $ IDENT
     )
     while True:
         # Work out the previous token:
