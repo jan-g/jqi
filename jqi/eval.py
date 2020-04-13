@@ -17,6 +17,7 @@ In time, all of these will be addressed (probably together).
 
 from numbers import Number
 from .error import Error
+from .function import _truth, REGISTER
 
 
 def pipe(x, y):
@@ -88,10 +89,6 @@ def binding(term, pattern, exp):
                     results.extend(items)
         return env, results
     return binding
-
-
-def _truth(x):
-    return x is not None and x is not False
 
 
 # log_and and log_or have bizarre short-circuiting behaviour
@@ -249,10 +246,4 @@ class Environment:
 
 
 def make_env():
-    return Environment(bindings={
-        "false/0": lambda env, item: (env, [False]),
-        "true/0": lambda env, item: (env, [True]),
-        "null/0": lambda env, item: (env, [None]),
-        "not/0": lambda env, item: (env, [not _truth(item)]),
-        "empty/0": lambda env, item: (env, []),
-    })
+    return Environment(bindings=REGISTER)
