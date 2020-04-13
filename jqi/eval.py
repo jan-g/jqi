@@ -1,3 +1,20 @@
+"""
+Note: there are currently three shortcomings with this implementation.
+
+The first is that we use materialised streams (ie, lists) and pass those around. It's not difficult
+to replace these with generators. The main issue with the current implementation is that it makes
+functions like `input` near-impossible to implement simply.
+
+The second issue is that we use the Python stack to manage the stack of filters.
+This has some small advantages (exception management can lean on Python's implementation); however,
+it precludes optimisations like tail recursion.
+
+The third issue is that we don't keep track of query paths. This makes update operators currently
+impossible to implement.
+
+In time, all of these will be addressed (probably together).
+"""
+
 from numbers import Number
 from .error import Error
 
@@ -45,6 +62,22 @@ def literal(n):
         return env, [n for _ in stream]
 
     return _literal
+
+
+def variable(v):
+    ident_name = "${}".format(v)
+    def variable(env_stream):
+        return [(env, env[ident_name]) for (env, _) in env_stream]
+    return variable
+
+
+def binding(exp, v):
+    ident_name = "${}".format(v)
+    # TODO: complex destructuring
+    def binding(env, stream):
+        for item in stream:
+            # TODO: refactor so environments are part of the stream!
+            raise NotImplementedError()
 
 
 def _truth(x):
