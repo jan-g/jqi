@@ -76,13 +76,18 @@ def variable(v):
     return variable
 
 
-def binding(exp, v):
-    ident_name = "${}".format(v)
+def binding(term, pattern, exp):
     # TODO: complex destructuring
-    def binding(env, stream):
-        for item in stream:
-            # TODO: refactor so environments are part of the stream!
-            raise NotImplementedError()
+    ident_name = "${}".format(pattern)
+    def binding(env_stream):
+        results = []
+        for env, item in env_stream:
+            # Work out the value to bind
+            for env2, value in exp([(env, item)]):
+                env3 = env2.child().update({ident_name: value})
+                results.append((env3, item))
+        return results
+    return binding
 
 
 def _truth(x):
@@ -147,8 +152,7 @@ def call(ident, *argfs):
             # Call the function with the items from its stream
             fun = env[ident_name]
             # We do this one at a time. The function itself will have to handle the argfs.
-            _, result = fun(env, item, *argfs)
-            results.extend(result)
+            results.extend(fun(env, item, *argfs))
         return results
 
     return apply
@@ -172,17 +176,42 @@ def collect(exp):
     def collect(env_stream):
         result = []
         for env, item in env_stream:
-            items = exp([(env, item)])
-            result.extend(items)
+            e_items = exp([(env, item)])
+            result.append((env, [i for (e, i) in e_items]))
         return result
     return collect
 
 
+class Environment:
+    def __init__(self, parent=None, bindings=None):
+        if bindings is None:
+            bindings = {}
+        self._dict = bindings
+        self._parent = parent
+
+    def child(self):
+        return self.__class__(parent=self)
+
+    def __getitem__(self, item):
+        try:
+            return self._dict[item]
+        except KeyError:
+            if self._parent is not None:
+                return self._parent[item]
+            raise
+
+    def __setitem__(self, item, value):
+        self._dict[item] = value
+
+    def update(self, d):
+        self._dict.update(d)
+
+
 def make_env():
-    return {
+    return Environment(bindings={
         "false/0": lambda env, item: [(env, False)],
         "true/0": lambda env, item: [(env, True)],
         "null/0": lambda env, item: [(env, None)],
         "not/0": lambda env, item: [(env, not _truth(item))],
         "empty/0": lambda env, item: [],
-    }
+    })

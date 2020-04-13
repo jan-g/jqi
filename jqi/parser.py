@@ -85,7 +85,7 @@ def term():
             token("(") >> exp << (token(")") | completion_point.optional()) |    # ( Exp )
             p_ident.map(call) |              # IDENT
             (token("[") >> exp << token("]")).map(collect) |    # [ Exp ]
-            (token("$") >> match_type(Ident)).map(variable)
+            (token("$") >> match_type(Ident)).map(variable)     # $ IDENT
     )
     while True:
         # Work out the previous token:

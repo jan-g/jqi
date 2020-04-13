@@ -9,9 +9,9 @@ class Completion(Exception):
 
 
 # return the union of keys of objects in the stream
-def sample_objects(stream):
+def sample_objects(env_stream):
     keys = set()
-    for item in stream:
+    for _, item in env_stream:
         try:
             keys.update(item.keys())
         except AttributeError:
@@ -28,13 +28,13 @@ def field_name(k):
 def complete_term(term, evaluator):
     if term == Token("."):
         pos = (term.start + 1, term.end)
-        def complete_term(env, stream):
-            samples = sample_objects(stream)
+        def complete_term(env_stream):
+            samples = sample_objects(env_stream)
             raise Completion(completions=[Token("")] + [field_name(k) for k in samples], pos=pos)
         return complete_term
     elif isinstance(term, (Field, PartialString)):
-        def complete_term(env, stream):
-            samples = sample_objects(stream)
+        def complete_term(env_stream):
+            samples = sample_objects(env_stream)
             raise Completion(completions=[field_name(k) for k in samples if k.startswith(term)], pos=term.pos)
         return complete_term
     else:
@@ -42,8 +42,8 @@ def complete_term(term, evaluator):
 
 
 def complete_field(prefix, evaluator):
-    def complete_field(env, stream):
-        _, stream = evaluator(env, stream)
+    def complete_field(env_stream):
+        stream = evaluator(env_stream)
         samples = sample_objects(stream)
         raise Completion(completions=[field_name(k) for k in samples if k.startswith(prefix)], pos=prefix.pos)
     return complete_field
