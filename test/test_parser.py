@@ -1,7 +1,7 @@
 import pytest
 from jqi.parser import parse, Token, Field, Ident, term, exp, ParseError
 from jqi.error import Error
-from jqi.eval import make_env
+from jqi.eval import make_env, evaluate
 from jqi import parser
 
 
@@ -31,7 +31,7 @@ def test_term(input, stream, result):
         with pytest.raises(result):
             parse(input, start=term)
         return
-    assert parse(input, start=term)({}, stream) == ({}, result)
+    assert evaluate(parse(input, start=term), {}, stream) == [({}, r) for r in result]
 
 
 def test_field():
@@ -74,4 +74,4 @@ def test_exp(input, stream, result):
             parse(input, start=term)
         return
     env = make_env()
-    assert parse(input, start=exp)(env, stream) == (env, result)
+    assert evaluate(parse(input, start=exp), env, stream) == [(env, r) for r in result]
