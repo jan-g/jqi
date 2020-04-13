@@ -9,12 +9,12 @@ def main(*args):
     if len(args) > 0:
         args = [args]
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", dest="cfg_file")
-    parser.add_argument("-x", default=False, action="store_true", dest="run")
-    parser.add_argument("-l", default=False, action="count", dest="list")
-    parser.add_argument("-p", default=False, action="store_true", dest="previous")
-    parser.add_argument("pattern", nargs="?")
-    parser.add_argument("file", nargs="?")
+    parser.add_argument("-f", dest="cfg_file", help="query save name")
+    parser.add_argument("-x", default=False, action="store_true", dest="run", help="run immediately")
+    parser.add_argument("-l", default=False, action="count", dest="list", help="list saved queries")
+    parser.add_argument("-p", default=False, action="store_true", dest="previous", help="use previous query")
+    parser.add_argument("pattern", nargs="?", help="override saved pattern")
+    parser.add_argument("file", nargs="?", help="file to operate on")
     args = parser.parse_args(*args)
 
     if args.cfg_file is None and args.previous:
