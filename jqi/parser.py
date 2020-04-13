@@ -191,7 +191,44 @@ exp7 = chainr(exp6, TODO("//"))
 exp8 = chainl(exp7, operator(",", comma))
 exp9 = chainr(exp8, operator("|", pipe))
 # Binds loosest
-exp = exp9 << match_type(Cursor.CursorToken).optional()
+
+@generate
+def exp():
+    bind = yield seq(term, token("as"), pattern, token("|"), exp).optional()
+    if bind is not None:
+        return binding(bind[0], bind[2], bind[4])
+
+    e = yield exp9 << match_type(Cursor.CursorToken).optional()
+    return e
+
+
+@generate
+def pattern():
+    bare_var = yield (token("$") >> match_type(Ident)).optional()
+    if bare_var is not None:
+        return
+
+"""
+Pattern:
+       '$' IDENT           |
+        '[' ArrayPats ']'  |
+        '{' ObjPats '}' 
+
+ArrayPats:
+        Pattern  |
+        ArrayPats ',' Pattern 
+
+ObjPats:
+        ObjPat  |
+        ObjPats ',' ObjPat 
+
+ObjPat:
+        '$' IDENT                |      # Just as {foo} is a handy way of writing {foo: .foo}, so {$foo} is a handy way of writing {foo:$foo}
+        IDENT       ':' Pattern  |
+        Keyword     ':' Pattern  |
+        String      ':' Pattern  |
+        '(' Exp ')' ':' Pattern
+"""
 
 
 def parse(s, start=exp):
