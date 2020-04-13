@@ -61,6 +61,7 @@ def test_destructure(item, target, result):
 
     # Complex object destructuring
     ('. as {("a", "b"):$A, ("b", "c"):$C} | [$A, $C]', [{"a": 1, "b": 2, "c": 3}], [[1, 2], [1, 3], [2, 2], [2, 3]]),
+    ('{"a": 1, "b": 2, "c": 3} as {("a", "b"):$A, ("b", "c"):$C} | [$A, $C]', [None], [[1, 2], [1, 3], [2, 2], [2, 3]]),
 ], ids=simplify)
 def test_parser(input, stream, result):
     if isinstance(result, type) and issubclass(result, Exception):

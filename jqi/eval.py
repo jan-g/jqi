@@ -193,6 +193,36 @@ def collect(exp):
     return collect
 
 
+def make_dict(pairs):
+    def make_dict(env, stream):
+        return env, _make_dicts(env, stream, pairs)
+    return make_dict
+
+
+def _make_dicts(env, stream, pairs):
+    if len(pairs) == 0:
+        return [{}]
+    (k, v), *rest = pairs
+    _, ks = k(env, stream)
+    _, vs = v(env, stream)
+    remainder = _make_dicts(env, stream, rest)
+    results = []
+    for k in ks:
+        for v in vs:
+            for others in remainder:
+                r = {str(k): v}
+                r.update(others)
+                results.append(r)
+    return results
+
+
+def negate(exp):
+    def negate(env, stream):
+        _, vs = exp(env, stream)
+        return env, [-v for v in vs]
+    return negate
+
+
 class Environment:
     def __init__(self, parent=None, bindings=None):
         if bindings is None:

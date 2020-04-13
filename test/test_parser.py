@@ -27,6 +27,12 @@ def simplify(x):
     ("(1, 2)", [None], [1, 2]),
     ('"a"', [None], ["a"]),
     ('[]', [None], [[]]),
+    ('{}', [None], [{}]),
+    ('{a}', [None], [{"a":"a"}]),
+    ('{a: 1}', [None], [{"a": 1}]),
+    ('{as: 1}', [None], [{"as": 1}]),
+    ('{"a"}', [None], [{"a": "a"}]),
+    ('{"a": 1}', [None], [{"a": 1}]),
 ], ids=simplify)
 def test_term(input, stream, result):
     if isinstance(result, type) and issubclass(result, Exception):
@@ -69,6 +75,14 @@ def test_field():
     ("[1, 2, 3]", [None, None], [[1, 2, 3], [1, 2, 3]]),
     ('."a"', [{}, {"a": "b"}], [None, "b"]),
     ('."a"."b"', [{}, {"a": {"b": "c"}}], [None, "c"]),
+    ('{("a", "b"):("c", "d")}', [None], [{"a": "c"}, {"a": "d"}, {"b": "c"}, {"b": "d"}]),
+    ('{("a", "b"):("c", "d"), ("e", "f"):("g", "h")}', [None],
+        [{"a": "c", "e": "g"}, {"a": "c", "e": "h"}, {"a": "c", "f": "g"}, {"a": "c", "f": "h"},
+         {"a": "d", "e": "g"}, {"a": "d", "e": "h"}, {"a": "d", "f": "g"}, {"a": "d", "f": "h"},
+         {"b": "c", "e": "g"}, {"b": "c", "e": "h"}, {"b": "c", "f": "g"}, {"b": "c", "f": "h"},
+         {"b": "d", "e": "g"}, {"b": "d", "e": "h"}, {"b": "d", "f": "g"}, {"b": "d", "f": "h"}]),
+    ('"A" as $a | $a', [None], ["A"]),
+    ('"A" as $a | {$a}', [None], [{"a": "A"}]),
 ], ids=simplify)
 def test_exp(input, stream, result):
     if isinstance(result, type) and issubclass(result, Exception):

@@ -75,7 +75,39 @@ def at(seek):
     return at
 
 
-@generate
+@generate("expd")
+def expd():
+    e = yield (token("-") >> expd).map(negate) | term
+    while True:
+        e2 = yield (token("|") >> ((token("-") >> expd).map(negate) | term)).optional()
+        if e2 is None:
+            return e
+        e = pipe(e, e2)
+
+
+@generate("keyword")
+def keyword():
+    t = yield match_type(Token)
+    if not t.isalpha():
+        yield fail("keyword")
+    return t
+
+
+@generate("mk_dict")
+def mk_dict():
+    pairs = yield (
+        seq(match_type(Ident).map(str).map(literal) << token(":"), expd) |       # IDENT : ExpD
+        seq(keyword.map(str).map(literal) << token(":"), expd) |                 # Keyword : Expd
+        seq(match_type(String).map(str).map(literal) << token(":"), expd) |      # String : Expd
+        match_type(String).map(str).map(literal).map(lambda s: (s, s)) |         # String
+        match_type(Ident).map(str).map(literal).map(lambda i: (i, i)) |          # Ident
+        token("$") >> match_type(Ident).map(lambda i: (literal(str(i)), variable(i))) |   # $ Ident
+        seq(token("(") >> exp << token(")") << token(":"), expd)        # ( Exp ) : Expd
+    ).sep_by(token(","))
+    return make_dict(pairs)
+
+
+@generate("term")
 def term():
     t = yield (
             match_type(String).map(literal) |  # String
@@ -88,7 +120,8 @@ def term():
             p_ident.map(call) |              # IDENT
             (token("[") >> exp << token("]")).map(collect) |    # [ Exp ]
             seq(token("["), token("]")).result(literal([])) |   # [ ]
-            (token("$") >> match_type(Ident)).map(variable)     # $ IDENT
+            (token("$") >> match_type(Ident)).map(variable) |    # $ IDENT
+            (token("{") >> mk_dict << token("}"))           # { MkDict }
     )
     while True:
         # Work out the previous token:
@@ -179,7 +212,7 @@ def TODO(t):
 
 
 # Binds tightest
-exp1 = chainl(term, operator("*", op_mul) | TODO("/") | TODO("%"))
+exp1 = chainl(term, operator("*", op_mul) | TODO("/") | TODO("%")) | (token("-") >> term).map(negate)
 exp2 = chainl(exp1, operator("+", op_add) | operator("-", op_sub))
 exp3 = nonassoc(exp2, TODO("!=") | TODO("==") | TODO("<") | TODO(">") | TODO("<=") | TODO(">="), exp2)
 exp4 = chainl(exp3, operator("and", log_and))
