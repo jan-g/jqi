@@ -39,7 +39,8 @@ def test_term(input, stream, result):
         with pytest.raises(result):
             parse(input, start=term)
         return
-    assert parse(input, start=term)({}, stream) == ({}, result)
+    env = make_env()
+    assert parse(input, start=term)(env, stream) == (env, result)
 
 
 def test_field():

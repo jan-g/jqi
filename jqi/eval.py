@@ -15,10 +15,12 @@ impossible to implement.
 In time, all of these will be addressed (probably together).
 """
 
+from copy import deepcopy
 from numbers import Number
 import operator
 
 from .error import Error
+from .lexer import Field
 from .function import _truth, REGISTER
 
 
@@ -56,14 +58,14 @@ def field(f):
             return Error.from_exception(e)
 
     def _field_access(env, stream):
-        return env, [access(i) for i in stream]
+        return env.child({".path": f}), [access(i) for i in stream]
 
     return _field_access
 
 
 def literal(n):
     def _literal(env, stream):
-        return env, [n for _ in stream]
+        return env.child({".path": "."}), [n for _ in stream]
 
     return _literal
 
@@ -72,7 +74,7 @@ def variable(v):
     ident_name = "${}".format(v)
     def variable(env, stream):
         value = env[ident_name]
-        return env, [value for _ in stream]
+        return env.child({".path": "."}), [value for _ in stream]
     return variable
 
 
@@ -220,6 +222,42 @@ def negate(exp):
     return negate
 
 
+# Updates have to construct new objects. In order to do this, we need to use the special `.path` attribute on
+# an environment and its parents to work out what we're updating.
+
+def set_path(lhs, rhs):
+    def set_path(env, stream):
+        results = []
+        for item in stream:
+            env2, lvalues = lhs(env, [item])
+            path = env2.get_path()
+            for lvalue in lvalues:
+                _, values = rhs(env, stream)
+                for value in values:
+                    # TODO: construct the updated item and return it
+                    result = deep_update(item, path, value)
+                    results.append(result)
+        return env, results
+    return set_path
+
+
+def deep_update(lhs, path, rhs):
+    while path != []:
+        step = path[0]
+        if step == '.':
+            path = path[1:]
+            continue
+        elif isinstance(step, Field):
+            step = str(step)
+            lhs = dict(lhs) if lhs is not None else {}
+            orig = lhs.get(step)
+            lhs[step] = deep_update(orig, path[1:], rhs)
+            return lhs
+        else:
+            raise NotImplementedError("unrecognised path update")
+    return rhs
+
+
 class Environment:
     def __init__(self, parent=None, bindings=None):
         if bindings is None:
@@ -243,7 +281,29 @@ class Environment:
 
     def update(self, d):
         self._dict.update(d)
+        return self
+
+    def effective_bindings(self):
+        b = {}
+        if self._parent is not None:
+            b = self._parent.effective_bindings()
+        b.update(self._dict)
+        return {k: b[k] for k in b if not k.startswith(".")}
+
+    def __eq__(self, other):
+        if type(self) is not type(other):
+            return False
+        return self.effective_bindings() == other.effective_bindings()
+
+    def get_path(self):
+        step = self._dict.get(".path", ".")
+        if step == ".":
+            return [step]
+        else:
+            return self._parent.get_path() + [step]
 
 
 def make_env():
-    return Environment(bindings=REGISTER)
+    bindings = {".path": "."}
+    bindings.update(REGISTER)
+    return Environment(bindings=bindings)

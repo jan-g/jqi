@@ -220,7 +220,7 @@ exp3 = nonassoc(exp2, operator("!=", op_ne) | operator("==", op_eq) |
                 operator("<=", op_le) | operator(">=", op_ge), exp2)
 exp4 = chainl(exp3, operator("and", log_and))
 exp5 = chainl(exp4, operator("or", log_or))
-exp6 = nonassoc(exp5, TODO("=") | TODO("|=") | TODO("+=") | TODO("-=") | TODO("*=") | TODO("/=") | TODO("//="), exp5)
+exp6 = nonassoc(exp5, operator("=", set_path) | TODO("|=") | TODO("+=") | TODO("-=") | TODO("*=") | TODO("/=") | TODO("//="), exp5)
 exp7 = chainr(exp6, TODO("//"))
 exp8 = chainl(exp7, operator(",", comma))
 exp9 = chainr(exp8, operator("|", pipe))
