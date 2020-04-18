@@ -16,6 +16,8 @@ In time, all of these will be addressed (probably together).
 """
 
 from numbers import Number
+import operator
+
 from .error import Error
 from .function import _truth, REGISTER
 
@@ -121,31 +123,29 @@ def log_or(xf, yf):
     return log_or
 
 
-def op_mul(xf, yf):
-    def op_mul(env, stream):
-        # Check here: are environments regenerated and passed through?
-        _, xs = xf(env, stream)
-        _, ys = yf(env, stream)
-        return env, [x * y for y in ys for x in xs]
-    return op_mul
+def op_generic(oper):
+    def op_generic(xf, yf):
+        def op_mul(env, stream):
+            # Check here: are environments regenerated and passed through?
+            _, xs = xf(env, stream)
+            _, ys = yf(env, stream)
+            return env, [oper(x, y) for y in ys for x in xs]
+        return op_mul
+    return op_generic
 
 
-def op_add(xf, yf):
-    def op_add(env, stream):
-        # Check here: are environments regenerated and passed through?
-        _, xs = xf(env, stream)
-        _, ys = yf(env, stream)
-        return env, [x + y for y in ys for x in xs]
-    return op_add
+op_mul = op_generic(operator.mul)
+op_add = op_generic(operator.add)
+op_sub = op_generic(operator.sub)
+op_div = op_generic(operator.truediv)
+op_mod = op_generic(operator.mod)
 
-
-def op_sub(xf, yf):
-    def op_sub(env, stream):
-        # Check here: are environments regenerated and passed through?
-        _, xs = xf(env, stream)
-        _, ys = yf(env, stream)
-        return env, [x - y for y in ys for x in xs]
-    return op_sub
+op_eq = op_generic(operator.eq)
+op_ne = op_generic(operator.ne)
+op_le = op_generic(operator.le)
+op_lt = op_generic(operator.lt)
+op_ge = op_generic(operator.ge)
+op_gt = op_generic(operator.gt)
 
 
 def call(ident, *argfs):

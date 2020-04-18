@@ -25,6 +25,7 @@ def simplify(x):
     ('false|not', [None], [True]),
     ('1|not', [None], [False]),
     ('(true, (false, true), 1, "foo", [], {})|select(.)', [None], [True, True, 1, "foo", [], {}]),
+    ('1, 2, 3 | select(. < 3, . % 2 != 0)', [None], [1, 1, 2, 3]),
 ], ids=simplify)
 def test_func(input, stream, result):
     if isinstance(result, type) and issubclass(result, Exception):

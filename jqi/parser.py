@@ -117,6 +117,9 @@ def term():
             p_field.map(field) |  # FIELD
             p_literal.map(literal) |               # LITERAL
             token("(") >> exp << (token(")") | completion_point.optional()) |    # ( Exp )
+            seq(match_type(Ident) << token("("),
+                exp.sep_by(token(";"), min=1) << token(")")
+                ).map(lambda fa: call(fa[0], *fa[1])) |         # IDENT ( Args )
             p_ident.map(call) |              # IDENT
             (token("[") >> exp << token("]")).map(collect) |    # [ Exp ]
             seq(token("["), token("]")).result(literal([])) |   # [ ]
@@ -177,9 +180,6 @@ Remaining items in Term:
         "break" '$' IDENT    |
         '.' String '?'       |
         FIELD '?'            |
-        IDENT '(' Args ')'   |
-        '[' ']'         |
-        '{' MkDict '}'  |
         '$' "__loc__"   |
         Term FIELD '?'       |
         Term '.' String '?'  |
@@ -212,9 +212,12 @@ def TODO(t):
 
 
 # Binds tightest
-exp1 = chainl(term, operator("*", op_mul) | TODO("/") | TODO("%")) | (token("-") >> term).map(negate)
+exp1 = (chainl(term, operator("*", op_mul) | operator("/", op_div) | operator("%", op_mod)) |
+        (token("-") >> term).map(negate))
 exp2 = chainl(exp1, operator("+", op_add) | operator("-", op_sub))
-exp3 = nonassoc(exp2, TODO("!=") | TODO("==") | TODO("<") | TODO(">") | TODO("<=") | TODO(">="), exp2)
+exp3 = nonassoc(exp2, operator("!=", op_ne) | operator("==", op_eq) |
+                operator("<", op_lt) | operator(">", op_gt) |
+                operator("<=", op_le) | operator(">=", op_ge), exp2)
 exp4 = chainl(exp3, operator("and", log_and))
 exp5 = chainl(exp4, operator("or", log_or))
 exp6 = nonassoc(exp5, TODO("=") | TODO("|=") | TODO("+=") | TODO("-=") | TODO("*=") | TODO("/=") | TODO("//="), exp5)

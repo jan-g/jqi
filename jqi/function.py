@@ -46,5 +46,5 @@ def empty(env, item):
 
 @register
 def select(env, item, test):
-    vs = test(env, [item])
-    return env, [item for v in vs if _truth(vs)]
+    _, vs = test(env, [item])
+    return env, [item for v in vs if _truth(v)]
