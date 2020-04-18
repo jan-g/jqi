@@ -16,9 +16,13 @@ def simplify(x):
 
 
 @pytest.mark.parametrize("input,stream,result", [
-    (". = 2", [1], [2]),
-    (".a = 2", [{}], [{"a": 2}]),
-    (".a.b.c = 2", [{}], [{"a": {"b": {"c": 2}}}]),
+    ('. = 2', [1], [2]),
+    ('.a = 2', [{}], [{"a": 2}]),
+    ('.a.b.c = 2', [{}], [{"a": {"b": {"c": 2}}}]),
+    ('.a | .b | .c = 2', [{}], [{"a": {"b": {"c": 2}}}]),
+    ('.a.b |.c = 2', [{}], [{"a": {"b": {"c": 2}}}]),
+    ('.a | .b.c = 2', [{}], [{"a": {"b": {"c": 2}}}]),
+    ('.a."b".c = 2', [{}], [{"a": {"b": {"c": 2}}}]),
 ], ids=simplify)
 def test_updates(input, stream, result):
     if isinstance(result, type) and issubclass(result, Exception):

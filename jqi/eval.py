@@ -20,7 +20,7 @@ from numbers import Number
 import operator
 
 from .error import Error
-from .lexer import Field
+from .lexer import Field, String
 from .function import _truth, REGISTER
 
 
@@ -247,7 +247,7 @@ def deep_update(lhs, path, rhs):
         if step == '.':
             path = path[1:]
             continue
-        elif isinstance(step, Field):
+        elif isinstance(step, (Field, String)):
             step = str(step)
             lhs = dict(lhs) if lhs is not None else {}
             orig = lhs.get(step)
