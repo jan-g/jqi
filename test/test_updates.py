@@ -24,6 +24,7 @@ def simplify(x):
     ('.a | .b.c = 2', [{}], [{"a": {"b": {"c": 2}}}]),
     ('.a."b".c = 2', [{}], [{"a": {"b": {"c": 2}}}]),
     ('.a | . | .c = 2', [{}], [{"a": {"c": 2}}]),
+    ('. | (.a, .b) = (1, 2)', [None], [{"a": 1, "b": 1}, {"a": 2, "b": 2}]),
 ], ids=simplify)
 def test_updates(input, stream, result):
     if isinstance(result, type) and issubclass(result, Exception):

@@ -15,7 +15,6 @@ impossible to implement.
 In time, all of these will be addressed (probably together).
 """
 
-from copy import deepcopy
 from numbers import Number
 import operator
 
@@ -229,14 +228,15 @@ def set_path(lhs, rhs):
     def set_path(env, stream):
         results = []
         for item in stream:
-            env2, lvalues = lhs(env, [item])
-            path = env2.get_path()
-            for lvalue in lvalues:
-                _, values = rhs(env, stream)
-                for value in values:
-                    # TODO: construct the updated item and return it
+            _, values = rhs(env, stream)
+            for value in values:
+                # TODO: construct the updated item and return it
+                result = item
+                env2, lvalues = lhs(env, [item])
+                path = env2.get_path()
+                for lvalue in lvalues:
                     result = deep_update(item, path, value)
-                    results.append(result)
+            results.append(result)
         return env, results
     return set_path
 
