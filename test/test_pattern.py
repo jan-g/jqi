@@ -2,7 +2,7 @@ import pytest
 from jqi.parser import parse, Token, Field, Ident, term, exp, ParseError
 from jqi.pattern import *
 from jqi.error import Error
-from jqi.eval import make_env, comma, literal
+from jqi.eval import make_env, comma, literal, splice, unsplice
 
 
 def simplify(x):
@@ -37,12 +37,12 @@ def simplify(x):
 ], ids=simplify)
 def test_destructure(item, target, result):
     env = make_env()
-    stream = [None]
+    stream = splice(env, [None])
     if isinstance(result, type) and issubclass(result, Exception):
         with pytest.raises(result):
-            target.bindings(env, stream, item)
+            target.bindings(stream, item)
         return
-    assert target.bindings(env, stream, item) == result
+    assert target.bindings(stream, item) == result
 
 
 @pytest.mark.parametrize("input,stream,result", [
@@ -69,5 +69,5 @@ def test_parser(input, stream, result):
             parse(input, start=term)
         return
     env = make_env()
-    assert parse(input, start=exp)(env, stream) == (env, result)
+    assert unsplice(parse(input, start=exp)(splice(env, stream))) == result
 

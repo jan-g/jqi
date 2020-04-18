@@ -21,30 +21,30 @@ def register(func):
 
 @register
 def false(env, item):
-    return env, [False]
+    return [(env, False)]
 
 
 @register
 def true(env, item):
-    return env, [True]
+    return [(env, True)]
 
 
 @register
 def null(env, item):
-    return env, [None]
+    return [(env, None)]
 
 
 @register
 def not_(env, item):
-    return env, [not _truth(item)]
+    return [(env, not _truth(item))]
 
 
 @register
 def empty(env, item):
-    return env, []
+    return []
 
 
 @register
 def select(env, item, test):
-    _, vs = test(env, [item])
-    return env, [item for v in vs if _truth(v)]
+    vs = test([(env, item)])
+    return [(env, item) for (_, v) in vs if _truth(v)]
