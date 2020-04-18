@@ -215,9 +215,11 @@ def TODO(t):
 exp1 = (chainl(term, operator("*", op_mul) | operator("/", op_div) | operator("%", op_mod)) |
         (token("-") >> term).map(negate))
 exp2 = chainl(exp1, operator("+", op_add) | operator("-", op_sub))
-exp3 = nonassoc(exp2, operator("!=", op_ne) | operator("==", op_eq) |
-                operator("<", op_lt) | operator(">", op_gt) |
-                operator("<=", op_le) | operator(">=", op_ge), exp2)
+exp3 = ((exp2 << token("==") << completion_point).map(complete_comparison) |
+        nonassoc(exp2, operator("!=", op_ne) | operator("==", op_eq) |
+                 operator("<", op_lt) | operator(">", op_gt) |
+                 operator("<=", op_le) | operator(">=", op_ge), exp2)
+        )
 exp4 = chainl(exp3, operator("and", log_and))
 exp5 = chainl(exp4, operator("or", log_or))
 exp6 = nonassoc(exp5, operator("=", set_path) | TODO("|=") | TODO("+=") | TODO("-=") | TODO("*=") | TODO("/=") | TODO("//="), exp5)

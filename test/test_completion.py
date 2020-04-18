@@ -59,6 +59,7 @@ def test_lexer(input, result):
     (". ##", [{"a": "b", "aa": "d"}], (1, 1), [Token(""), Field("a"), Field("aa")]),
     ('."##', [{"a": "b", "aa": "d"}], (1, 2), [Field("a"), Field("aa")]),
     ('."a"."##', [{"a": {"aaa": "b", "aa": "d"}}], (5, 6), [Field("aa"), Field("aaa")]),
+    ('(1, "a", [], {}) == ##', [None], (20, 20), [1, "a"]),
 ], ids=simplify)
 def test_completion(input, stream, pos, result):
     # Work out where the cursor is in the input

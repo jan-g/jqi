@@ -15,6 +15,6 @@ def completer(s, offset, start=exp):
             _ = evaluator(splice(env, stream))
             return []
         except Completion as c:
-            return c.completions, c.pos
+            return c.completions, c.pos if c.pos is not None else (offset, offset)
 
     return complete

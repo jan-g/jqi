@@ -1,3 +1,5 @@
+import functools
+from numbers import Number
 from .parser import Field, Token, Ident, PartialString, String
 
 
@@ -48,3 +50,58 @@ def complete_field(prefix, evaluator):
         samples = sample_objects(stream)
         raise Completion(completions=[field_name(k) for k in samples if k.startswith(prefix)], pos=prefix.pos)
     return complete_field
+
+
+def complete_comparison(evaluator):
+    def complete_comparison(stream):
+        stream = evaluator(stream)
+        samples = sample_values(stream)
+        raise Completion(completions=[value for value in samples], pos=None)
+    return complete_comparison
+
+
+def sample_values(stream):
+    items = set()
+    for env, item in stream:
+        if isinstance(item, (Number, str)):
+            items.add(item)
+    return sorted(items, key=functools.cmp_to_key(jq_cmp))
+
+
+def jq_cmp(x, y):
+    """
+    null
+    false
+    true
+    numbers
+    strings, in alphabetical order (by unicode codepoint value)
+    arrays, in lexical order
+    objects
+    """
+    if x is None:
+        return 0 if y is None else -1
+    if y is None:
+        return 1
+
+    if x is False:
+        return 0 if y is False else -1
+    if y is False:
+        return 1
+
+    if x is True:
+        return 0 if y is True else -1
+    if y is True:
+        return 1
+
+    if isinstance(x, Number):
+        return (x > y) - (x < y) if isinstance(y, Number) else -1
+    if isinstance(y, Number):
+        return 1
+
+    if isinstance(x, str):
+        return (x > y) - (x < y) if isinstance(y, str) else -1
+    if isinstance(y, str):
+        return 1
+
+    raise NotImplementedError("can't yet compare types {} and {}".format(type(x), type(y)))
+

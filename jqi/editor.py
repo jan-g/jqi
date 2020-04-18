@@ -3,6 +3,7 @@ import asyncio
 import config_dir
 import io
 import json
+from numbers import Number
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import Completer, Completion
@@ -89,7 +90,7 @@ class JQCompleter(Completer):
 def _expand_completion(c):
     if isinstance(c, (Token, Field)):
         return c
-    elif isinstance(c, String):
+    elif isinstance(c, (String, str, Number)):
         return json.dumps(c)
     else:
         raise NotImplementedError("{} = {}".format(c, type(c)))
