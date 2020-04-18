@@ -24,26 +24,26 @@ from .function import _truth, REGISTER
 
 
 def pipe(x, y):
-    def pipe(env, stream):
-        env, stream = x(env, stream)
-        env, stream = y(env, stream)
-        return env, stream
+    def pipe(stream):
+        stream = x(stream)
+        stream = y(stream)
+        return stream
     return pipe
 
 
-def dot(env, stream):
-    return env, stream
+def dot(stream):
+    return stream
 
 
 def comma(x, y):
-    def comma(env, stream):
+    def comma(stream):
         result = []
-        for item in stream:
-            _, r1 = x(env, [item])
-            result.extend(r1)
-            _, r2 = y(env, [item])
-            result.extend(r2)
-        return env, result
+        for pair in stream:
+            r1s = x([pair])
+            result.extend(r1s)
+            r2s = y([pair])
+            result.extend(r2s)
+        return result
     return comma
 
 
@@ -56,81 +56,82 @@ def field(f):
         except Exception as e:
             return Error.from_exception(e)
 
-    def _field_access(env, stream):
-        return env.child({".path": f}), [access(i) for i in stream]
+    def _field_access(stream):
+        return [(e.child({".path": f}), access(i)) for (e, i) in stream]
 
     return _field_access
 
 
 def literal(n):
-    def _literal(env, stream):
-        return env.child({".path": "."}), [n for _ in stream]
+    if isinstance(n, String):
+        n = str(n)
+    def _literal(stream):
+        return [(e.child({".path": "."}), n) for (e, _) in stream]
 
     return _literal
 
 
 def variable(v):
     ident_name = "${}".format(v)
-    def variable(env, stream):
-        value = env[ident_name]
-        return env.child({".path": "."}), [value for _ in stream]
+    def variable(stream):
+        return [(e.child({".path": "."}), e[ident_name]) for (e, _) in stream]
     return variable
 
 
 def binding(term, pattern, exp):
     # TODO: complex destructuring
-    def binding(env, stream):
+    def binding(stream):
         results = []
-        for item in stream:
+        for (env, item) in stream:
             # Work out the value(s) to bind
-            _, values = term(env, [item])
-            for value in values:
-                bindings = pattern.bindings(env, stream, value)
+            values = term([(env, item)])
+            for env2, value in values:
+                bindings = pattern.bindings(stream, value)
                 for binding in bindings:
-                    env2 = env.child(binding)
-                    _, items = exp(env2, [item])
+                    env3 = env.child(binding)
+                    items = exp([(env3, item)])
                     results.extend(items)
-        return env, results
+        return results
     return binding
 
 
 # log_and and log_or have bizarre short-circuiting behaviour
 def log_and(xf, yf):
-    def log_and(env, stream):
+    def log_and(stream):
         results = []
-        _, xs = xf(env, stream)
-        for x in xs:
+        xs = xf(stream)
+        for e1, x in xs:
             if _truth(x):
                 # XXX: does the environment from the LHS percolate into the environment on the RHS?
-                _, ys = yf(env, stream)
-                results.extend(_truth(y) for y in ys)
+                ys = yf(stream)
+                results.extend((e2, _truth(y)) for (e2, y) in ys)
             else:
-                results.append(False)
-        return env, results
+                results.append((e1, False))
+        return results
     return log_and
 
 
 def log_or(xf, yf):
-    def log_or(env, stream):
+    def log_or(stream):
         results = []
-        _, xs = xf(env, stream)
-        for x in xs:
+        xs = xf(stream)
+        for e1, x in xs:
             if _truth(x):
-                results.append(True)
+                results.append((e1, True))
             else:
-                _, ys = yf(env, stream)
-                results.extend(_truth(y) for y in ys)
-        return env, results
+                ys = yf(stream)
+                results.extend((e2, _truth(y)) for (e2, y) in ys)
+        return results
     return log_or
 
 
 def op_generic(oper):
     def op_generic(xf, yf):
-        def op_mul(env, stream):
+        def op_mul(stream):
             # Check here: are environments regenerated and passed through?
-            _, xs = xf(env, stream)
-            _, ys = yf(env, stream)
-            return env, [oper(x, y) for y in ys for x in xs]
+            xs = xf(stream)
+            ys = yf(stream)
+            return [(e, oper(x, y)) for (e, y) in ys for (_, x) in xs]
         return op_mul
     return op_generic
 
@@ -153,71 +154,71 @@ def call(ident, *argfs):
     # Work out the arity of the function call
     ident_name = "{}/{}".format(ident, len(argfs))
 
-    def apply(env, stream):
+    def apply(stream):
         # Check the order of evaluation here
         results = []
-        fun = env[ident_name]
         # We do this one at a time. The function itself will have to handle the argfs.
-        for item in stream:
+        for env, item in stream:
+            fun = env[ident_name]
             # Call the function with the items from its stream
-            _, values = fun(env, item, *argfs)
+            values = fun(env, item, *argfs)
             results.extend(values)
-        return env, results
+        return results
 
     return apply
 
 
-def iterate(env, stream):
+def iterate(stream):
     result = []
-    for item in stream:
+    for env, item in stream:
         if isinstance(item, (Number, str, type(None))):
             raise ValueError("can't iterate over {}".format(type(item).__name__))
         elif isinstance(item, list):
-            result.extend(item)
+            result.extend((env, i) for i in item)
         elif isinstance(item, dict):
-            result.extend(item.values())
+            result.extend((env, i) for i in item.values())
         else:
             raise ValueError("can't iterate over {}".format(type(item).__name__))
-    return env, result
+    return result
 
 
 def collect(exp):
-    def collect(env, stream):
+    def collect(stream):
         result = []
-        for item in stream:
-            _, items = exp(env, [item])
-            result.append(items)
-        return env, result
+        for env, item in stream:
+            items = exp([(env, item)])
+            result.append((env, [i for (_, i) in items]))
+        return result
     return collect
 
 
 def make_dict(pairs):
-    def make_dict(env, stream):
-        return env, _make_dicts(env, stream, pairs)
+    def make_dict(stream):
+        return _make_dicts(stream, pairs)
     return make_dict
 
 
-def _make_dicts(env, stream, pairs):
+def _make_dicts(stream, pairs):
     if len(pairs) == 0:
-        return [{}]
+        return [(make_env(), {})]
     (k, v), *rest = pairs
-    _, ks = k(env, stream)
-    _, vs = v(env, stream)
-    remainder = _make_dicts(env, stream, rest)
+    ks = k(stream)
+    vs = v(stream)
+    remainder = _make_dicts(stream, rest)
     results = []
-    for k in ks:
-        for v in vs:
-            for others in remainder:
+    for e1, k in ks:
+        for e2, v in vs:
+            for e3, others in remainder:
                 r = {str(k): v}
                 r.update(others)
-                results.append(r)
+                results.append((e1, r))
     return results
 
 
 def negate(exp):
-    def negate(env, stream):
-        _, vs = exp(env, stream)
-        return env, [-v for v in vs]
+    def negate(stream):
+        vs = exp(stream)
+        return [(e, -v) for (e, v) in vs]
     return negate
 
 
@@ -225,19 +226,19 @@ def negate(exp):
 # an environment and its parents to work out what we're updating.
 
 def set_path(lhs, rhs):
-    def set_path(env, stream):
+    def set_path(stream):
         results = []
-        for item in stream:
-            _, values = rhs(env, stream)
-            for value in values:
+        for env, item in stream:
+            rvalues = rhs([(env, item)])
+            for env2, rvalue in rvalues:
                 # TODO: construct the updated item and return it
                 result = item
-                env2, lvalues = lhs(env, [item])
-                path = env2.get_path()
-                for lvalue in lvalues:
-                    result = deep_update(item, path, value)
-            results.append(result)
-        return env, results
+                lvalues = lhs([(env, item)])
+                for env2, lvalue in lvalues:
+                    path = env2.get_path()
+                    result = deep_update(result, path, rvalue)
+                results.append((env, result))
+        return results
     return set_path
 
 
@@ -307,3 +308,11 @@ def make_env():
     bindings = {".path": "."}
     bindings.update(REGISTER)
     return Environment(bindings=bindings)
+
+
+def splice(env, items):
+    return [(env, i) for i in items]
+
+
+def unsplice(stream):
+    return [i for (_, i) in stream]

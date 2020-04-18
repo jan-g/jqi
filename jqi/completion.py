@@ -1,7 +1,7 @@
 from .lexer import lex
 from .parser import exp
 from .completer import *
-from .eval import make_env
+from .eval import make_env, splice
 
 
 def completer(s, offset, start=exp):
@@ -12,7 +12,7 @@ def completer(s, offset, start=exp):
             env = {}
         env = make_env().update(env)    # Install standard bindings
         try:
-            _, _ = evaluator(env, stream)
+            _ = evaluator(splice(env, stream))
             return []
         except Completion as c:
             return c.completions, c.pos

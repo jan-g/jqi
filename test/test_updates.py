@@ -1,6 +1,6 @@
 import pytest
 from jqi.parser import parse, Token, Field, Ident, term, exp, ParseError
-from jqi.eval import make_env, pipe, binding, literal, variable
+from jqi.eval import make_env, pipe, binding, literal, variable, splice, unsplice
 from jqi.pattern import *
 
 
@@ -32,4 +32,4 @@ def test_updates(input, stream, result):
             parse(input, start=term)
         return
     env = make_env()
-    assert parse(input, start=exp)(env, stream) == (env, result)
+    assert unsplice(parse(input, start=exp)(splice(env, stream))) == result
