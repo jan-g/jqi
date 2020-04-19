@@ -1,10 +1,10 @@
 from .lexer import lex
-from .parser import exp
+from .parser import top_level
 from .completer import *
 from .eval import make_env, splice
 
 
-def completer(s, offset, start=exp):
+def completer(s, offset, start=top_level):
     evaluator = start.parse(lex(s, offset))
 
     def complete(stream="", env=None):

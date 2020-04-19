@@ -116,7 +116,7 @@ def term():
             token(".").result(dot) |  # .
             p_field.map(field) |  # FIELD
             p_literal.map(literal) |               # LITERAL
-            token("(") >> exp << (token(")") | completion_point.optional()) |    # ( Exp )
+            token("(") >> exp << (token(")") | completion_point) |    # ( Exp )
             seq(match_type(Ident) << token("("),
                 exp.sep_by(token(";"), min=1) << token(")")
                 ).map(lambda fa: call(fa[0], *fa[1])) |         # IDENT ( Args )
@@ -234,7 +234,7 @@ def exp():
     if bind is not None:
         return binding(bind[0], bind[2], bind[4])
 
-    e = yield exp9 << match_type(Cursor.CursorToken).optional()
+    e = yield exp9 << completion_point.optional()
     return e
 
 
@@ -263,9 +263,12 @@ def pattern():
     yield fail("pattern")
 
 
-def parse(s, start=exp):
+top_level = exp << match_type(Cursor.CursorToken).optional()
+
+
+def parse(s, start=top_level):
     return start.parse(lex(s))
 
 
-def complete(s, offset, start=exp):
+def complete(s, offset, start=top_level):
     return start.parse(lex(s, offset))
