@@ -11,6 +11,6 @@ Use:
 
 or
 
-    jqi /tmp/foo.json | file
+    jqi /tmp/foo.json file
 
 Use control-C to exit.
