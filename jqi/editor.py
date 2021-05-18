@@ -10,6 +10,7 @@ from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.input.defaults import create_input
+from prompt_toolkit.keys import Keys
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout.containers import HSplit, VSplit, Window
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
@@ -116,6 +117,8 @@ class Editor(Refresh):
         self.cache = {Editor.CACHE_ORIGINAL_OBJECT: None}
         self.error = None
         self.vbar = self.completions = None
+        self.result_coords = (0, 0)
+        self.max_coords = (0, 0)
         self.load()
         self.layout()
         self.mode = Editor.CACHE_JQ_LINES
@@ -134,6 +137,14 @@ class Editor(Refresh):
             {"keys": ["c-r"], "args": {}, "func": "toggle_raw"},
             {"keys": ["c-y"], "args": {}, "func": "set_mode_yaml"},
             {"keys": ["c-j"], "args": {}, "func": "set_mode_jq"},
+            {"keys": ["escape", "up"], "args": {}, "func": "output_move"},
+            {"keys": ["escape", "down"], "args": {}, "func": "output_move"},
+            {"keys": ["escape", "left"], "args": {}, "func": "output_move"},
+            {"keys": ["escape", "right"], "args": {}, "func": "output_move"},
+            {"keys": ["escape", "[", "1", ";", "9", "H"], "args": {}, "func": "output_move"},
+            {"keys": ["escape", "[", "1", ";", "9", "F"], "args": {}, "func": "output_move"},
+            {"keys": ["escape", "pageup"], "args": {}, "func": "output_move"},
+            {"keys": ["escape", "pagedown"], "args": {}, "func": "output_move"},
         ]
         cfg = {
             "bindings": bindings,
@@ -226,28 +237,54 @@ class Editor(Refresh):
     def update_main_window(self):
         # On input, some of `self.cache` is already populated.
         # Update the main window according to settings
-        lines = []
         if self.mode == Editor.CACHE_JQ_LINES:
             out = self.cache[Editor.CACHE_BYTES]
-            if self.cache[Editor.CACHE_JQ_LINES] is None:
-                self.cache[Editor.CACHE_JQ_LINES] = out.splitlines()
-            lines = self.cache[Editor.CACHE_JQ_LINES]
+            if (lines := self.cache[Editor.CACHE_JQ_LINES]) is None:
+                lines = self.cache[Editor.CACHE_JQ_LINES] = out.splitlines()
+                self.max_coords = (len(lines), max(len(line) for line in lines))
         elif self.mode == Editor.CACHE_YAML_LINES:
-            if self.cache[Editor.CACHE_YAML_LINES] is None:
+            if (lines := self.cache[Editor.CACHE_YAML_LINES]) is None:
                 try:
                     objects = self._get_cached_objects()
                     out = yaml.safe_dump_all(objects)
                 except json.JSONDecodeError:
                     out = "Error parsing stream as Yaml"
-                self.cache[Editor.CACHE_YAML_LINES] = out.splitlines()
-            lines = self.cache[Editor.CACHE_YAML_LINES]
+                lines = self.cache[Editor.CACHE_YAML_LINES] = out.splitlines()
+                self.max_coords = (len(lines), max(len(line) for line in lines))
         else:
             raise NotImplementedError("Unknown mode: {}".format(self.mode))
 
         # Window positioning goes here.
         maxwidth = max(self.app.output.get_size().columns * 10, 160)
         maxlen = max(self.app.output.get_size().rows * 2, 100)
-        self.result.content.text = ANSI("\n".join(line[:maxwidth] for line in lines[:maxlen]))
+        top, left = self.result_coords
+        self.result.content.text = ANSI("\n".join(line[left:left + maxwidth] for line in lines[top:top + maxlen]))
+
+    def output_move(self, event):
+        # key_sequence=[KeyPress(key=<Keys.Escape: 'escape'>, data='\x1b'), KeyPress(key=<Keys.Left: 'left'>, data='\x1b[D')]
+        seq = [press.key for press in event.key_sequence]
+        width = self.app.output.get_size().columns
+        height = self.app.output.get_size().rows
+        top, left = self.result_coords
+        max_top, max_left = self.max_coords
+        if seq == [Keys.Escape, Keys.Left]:
+            left = max(0, left - 4)
+        elif seq == [Keys.Escape, Keys.Right]:
+            left = min(max_left, left + 4)
+        elif seq == [Keys.Escape, Keys.Up]:
+            top = max(0, top - 1)
+        elif seq == [Keys.Escape, Keys.Down]:
+            top = min(max_top, top + 1)
+        elif seq == [Keys.Escape, Keys.PageUp]:
+            top = max(0, top - height)
+        elif seq == [Keys.Escape, Keys.PageDown]:
+            top = min(max_top, top + height)
+        elif seq == ["escape", "[", "1", ";", "9", "H"]:
+            left = max(0, left - width)
+        elif seq == ["escape", "[", "1", ";", "9", "F"]:
+            left = min(max_left, left + width)
+        self.result_coords = (top, left)
+        self.update_main_window()
 
     _STRIP_ANSI = re.compile(r"""
         (\001[^\002]*\002) | # zero-width sequence
