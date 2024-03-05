@@ -402,7 +402,7 @@ class Editor(Refresh):
             tty_args.update({"_tty_out": tty})
 
         try:
-            proc = sh.jq(*args, _in=self.input, _out=out, _err=err, **tty_args)
+            proc = sh.jq(*args, _in=self.input, _out=out, _err=err, _return_cmd=True, **tty_args)
             proc.wait()
             if not stdio:
                 out = out.getvalue()
