@@ -1,6 +1,7 @@
 """Mix-ins for the Editor"""
 import asyncio
 import config_dir
+from functools import partial
 import io
 import json
 from numbers import Number
@@ -367,11 +368,11 @@ class Editor(Refresh):
 
     def run(self, text):
         self.input = text
-        self.create_refresh_task(refresh=self.reformat, get_pattern=self.get_pattern)
+        start_refresh = partial(self.create_refresh_task, refresh=self.reformat, get_pattern=self.get_pattern)
         self.reformat()
 
         # Run the application, and wait for it to finish.
-        result = self.app.run()
+        result = self.app.run(start_refresh)
         self.cancel_refresh_task()
 
         if result != 0:
